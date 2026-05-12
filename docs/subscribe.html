@@ -13,6 +13,10 @@
       .hint { color: #555; font-size: 13px; margin-top: 4px; }
       .project-note { background: rgba(4, 30, 66, 0.08); border: 1px solid rgba(4, 30, 66, 0.2); padding: 12px 14px; border-radius: 8px; margin: 12px 0 16px; }
       .section-gap { margin-top: 12px; }
+      .sources { margin-top: 20px; padding-top: 12px; border-top: 1px solid rgba(0, 0, 0, 0.12); }
+      .sources h2 { font-size: 18px; margin: 0 0 8px; }
+      .sources ul { margin: 0 0 0 18px; padding: 0; }
+      .sources li { margin: 6px 0; }
       .msg { margin-top: 12px; white-space: pre-wrap; }
       iframe { display: none; }
     </style>
@@ -45,11 +49,28 @@
       </div>
       <input id="topicsInput" name="topics" type="hidden" />
 
-      <label for="interests" class="section-gap">Anything else you care about?</label>
+      <label for="interests" class="section-gap">We can customize your digest to the topics you care about.  Please let us know the specific topics that you would like to receive updates about.</label>
       <textarea id="interests" name="interests" rows="3" placeholder="e.g., committee hearings, Pepco oversight, neighborhood projects"></textarea>
       <div class="hint">We use this to tailor the weekly summary for you.</div>
       <button id="btn" type="submit" class="section-gap">Subscribe</button>
     </form>
+
+    <section class="sources" aria-labelledby="sources-title">
+      <h2 id="sources-title">Sources</h2>
+      <p class="hint">The newsletter is generated from a mix of official and local news sources. Current feeds include:</p>
+      <ul>
+        <li>DC Council official Granicus hearings feed</li>
+        <li>DC Register recent rulemakings (Proposed + Emergency), filtered to DC Council-related notices only</li>
+        <li>DC Council YouTube channel feed</li>
+        <li>Google Alerts for major news mentions</li>
+        <li>States Newsroom (DC Bureau)</li>
+        <li>Washington Post (Politics, Local)</li>
+        <li>Washington Times (Headlines)</li>
+        <li>51st.news (Latest)</li>
+        <li>Popville</li>
+        <li>Greater Greater Washington</li>
+      </ul>
+    </section>
 
     <div id="msg" class="msg"></div>
     <iframe name="hidden_iframe" id="hidden_iframe"></iframe>
