@@ -8,9 +8,10 @@
       body { font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
       input[type="email"], textarea { width: 100%; padding: 12px; font-size: 16px; margin: 10px 0; }
       button { padding: 12px 16px; font-size: 16px; cursor: pointer; }
-      .topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 6px; }
+      .topics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0 14px; }
       .topic { display: flex; align-items: center; gap: 8px; }
-      .hint { color: #555; font-size: 13px; margin-top: 4px; }
+      .hint { color: #555; font-size: 13px; margin-top: 2px; }
+      .intro { margin: 0 0 4px; }
       .project-note { background: rgba(4, 30, 66, 0.08); border: 1px solid rgba(4, 30, 66, 0.2); padding: 12px 14px; border-radius: 8px; margin: 12px 0 16px; }
       .section-gap { margin-top: 12px; }
       .sources { margin-top: 20px; padding-top: 12px; border-top: 1px solid rgba(0, 0, 0, 0.12); }
@@ -32,7 +33,7 @@
         If you have any suggestions or feedback, please direct them to gz163@georgetown.edu. Thanks!
       </p>
     </div>
-    <p>Enter your email to subscribe.</p>
+    <p class="intro">Enter your email to subscribe.</p>
     <p class="hint">Already subscribed? You can update your preferences here anytime.</p>
 
     <form id="form" method="POST" target="hidden_iframe">
