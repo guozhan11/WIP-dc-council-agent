@@ -5,6 +5,7 @@ This folder contains the core data collection, summarization, and email delivery
 ## Files
 
 - collect.py: RSS/Atom collector. Fetches feeds from config, filters by keywords for non-official sources, and inserts new items into the database.
+- backfill_content.py: Utility to populate richer `content` values for existing database rows.
 - collect_youtube_live.py: YouTube API collector for live/upcoming streams and events.
 - db.py: SQLite helpers for schema initialization and item/subscriber queries.
 - digest.py: Weekly digest generator. Builds per-subscriber summaries, renders the HTML template, and sends emails.
@@ -18,6 +19,7 @@ This folder contains the core data collection, summarization, and email delivery
 ## Notes
 
 - The main daily ingestion entry point is collect.py.
+- Run `python src/backfill_content.py --dry-run --limit 10` to preview backfilling existing rows.
 - The weekly newsletter entry point is digest.py.
 
 ## Digest flow highlights

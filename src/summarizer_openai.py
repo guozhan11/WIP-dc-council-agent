@@ -187,6 +187,19 @@ def _split_bullet_text(text: str) -> tuple[str, str]:
     return normalized_text, ""
 
 
+def _clean_bullet_text(text: str) -> str:
+    cleaned = str(text or "")
+    cleaned = re.sub(r"\s*\((?:Sources?|Source)\s*:[^)]*\)\s*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bSources?\s*:?\s*\[[^\]]*\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*\[[0-9,\s]+\]", "", cleaned)
+    cleaned = re.sub(r"\s+\([,\s;]+\)(?=\s*[.;,!?]|$)", "", cleaned)
+    cleaned = re.sub(r"\([,\s;]+\)(?=\s*[.;,!?]|$)", "", cleaned)
+    cleaned = re.sub(r"\s+([.;,!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s*—\s*$", "", cleaned).strip()
+    return cleaned
+
+
 def _sanitize_source_title(value: str) -> str:
     text = html.unescape(str(value or ""))
     # Some feeds include inline markup (<b>..</b>) in titles.
@@ -196,6 +209,34 @@ def _sanitize_source_title(value: str) -> str:
     text = re.sub(r"__(.*?)__", r"\1", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def _interest_terms(interests: str | None) -> set[str]:
+    terms = set()
+    for token in re.findall(r"[a-z0-9]+", str(interests or "").lower()):
+        if len(token) >= 4:
+            terms.add(token)
+    return terms
+
+
+def _relevant_excerpt(text: str, interests: str | None, max_chars: int = 3000) -> str:
+    cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(cleaned) <= max_chars:
+        return cleaned
+
+    terms = _interest_terms(interests)
+    if terms:
+        sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+        matched = []
+        for sentence in sentences:
+            sentence_terms = _tokenize(sentence)
+            if terms & sentence_terms:
+                matched.append(sentence.strip())
+        excerpt = re.sub(r"\s+", " ", " ".join(matched)).strip()
+        if excerpt:
+            return excerpt[:max_chars].strip()
+
+    return cleaned[:max_chars].strip()
 
 
 def _normalize_source_url(item: Dict[str, Any]) -> str:
@@ -245,15 +286,19 @@ def summarize_updates(
     # The model will cite items by index (1-based).
     trimmed_items = []
     for it in items:
+        summary_text = re.sub(r"\s+", " ", str(it.get("summary") or "")).strip()
+        content_text = str(it.get("content") or it.get("text") or "").strip()
+        content_excerpt = _relevant_excerpt(content_text, interests, max_chars=3000)
+        if not content_excerpt and summary_text:
+            content_excerpt = summary_text[:3000]
         trimmed_items.append(
             {
                 "title": _sanitize_source_title((it.get("title") or ""))[:200],
                 "source": (it.get("source") or "")[:80],
                 "url": _normalize_source_url(it)[:500],
-                # Prefer the "content" / "summary" you already scraped
-                "text": (it.get("text") or it.get("summary") or "")[:2000],
-                # Optional fields if you have them
-                "date": it.get("date"),
+                "summary": summary_text[:1000],
+                "content_excerpt": content_excerpt[:3000],
+                "date": it.get("date") or it.get("published_at") or it.get("created_at"),
             }
         )
 
@@ -340,13 +385,7 @@ Here are the items as JSON:
                 merged_sources.append(n)
         bullet["sources"] = merged_sources
 
-        text = re.sub(r"\s*\((?:Sources?|Source)\s*:[^)]*\)\s*$", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\bSources?\s*:?\s*\[[^\]]*\]", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\s*\[[0-9,\s]+\]", "", text)
-        bullet_text = re.sub(r"\s+", " ", text).strip()
-        # Strip any trailing em-dash left behind after source citations were removed
-        # (e.g. "...challenges. — [1,2]" → after stripping [1,2] → "...challenges. —")
-        bullet_text = re.sub(r"\s*—\s*$", "", bullet_text).strip()
+        bullet_text = _clean_bullet_text(text)
         lead, detail = _split_bullet_text(bullet_text)
         bullet["lead"] = lead
         bullet["detail"] = detail

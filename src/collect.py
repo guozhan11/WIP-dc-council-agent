@@ -18,6 +18,18 @@ DCREGS_ACTIVITY_TARGETS = [
 ]
 
 
+ARTICLE_FETCH_SKIP_SOURCES = {
+    "granicus_rss",
+    "granicus_captions",
+    "youtube",
+    "youtube_live",
+    "youtube_upcoming",
+    "dcregs",
+    "dcregs_proposed",
+    "dcregs_emergency",
+}
+
+
 def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -129,6 +141,68 @@ def fetch_feed(url: str, source: str):
     return feedparser.parse(resp.text)
 
 
+def _normalize_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _entry_content_text(entry) -> str:
+    content_parts = []
+    for content_item in entry.get("content", []) or []:
+        value = content_item.get("value") if isinstance(content_item, dict) else ""
+        if value:
+            content_parts.append(strip_html(value))
+    return _normalize_whitespace(" ".join(content_parts))
+
+
+def extract_article_text(html_text: str) -> str:
+    soup = BeautifulSoup(html_text or "", "html.parser")
+    for tag in soup(["script", "style", "noscript", "svg", "iframe", "form", "nav", "footer", "header"]):
+        tag.decompose()
+
+    candidates = []
+    for selector in ["article", "main", '[role="main"]']:
+        candidates.extend(soup.select(selector))
+    candidates.append(soup.body or soup)
+
+    best_text = ""
+    for candidate in candidates:
+        paragraphs = [
+            _normalize_whitespace(p.get_text(" ", strip=True))
+            for p in candidate.find_all(["p", "li"])
+        ]
+        paragraphs = [p for p in paragraphs if len(p) >= 40]
+        text = _normalize_whitespace(" ".join(paragraphs))
+        if len(text) > len(best_text):
+            best_text = text
+
+    return best_text
+
+
+def fetch_article_content(url: str, source: str) -> str:
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return ""
+    if source in ARTICLE_FETCH_SKIP_SOURCES:
+        return ""
+    if re.search(r"\.(pdf|mp3|mp4|mov|zip)(?:$|\?)", parsed.path, flags=re.IGNORECASE):
+        return ""
+
+    headers = {"User-Agent": "dc-digest-bot/0.1"}
+    try:
+        resp = requests.get(url, timeout=20, headers=headers)
+        resp.raise_for_status()
+    except Exception:
+        return ""
+
+    content_type = (resp.headers.get("Content-Type") or "").lower()
+    if content_type and "html" not in content_type:
+        return ""
+
+    return extract_article_text(resp.text)[:12000]
+
+
 def parse_feed(feed_name: str, source: str, url: str):
     try:
         parsed = fetch_feed(url, source)
@@ -154,6 +228,7 @@ def parse_feed(feed_name: str, source: str, url: str):
 
         # 2) Clean summary into plain text for readability
         summary = strip_html(summary_raw)
+        entry_content = _entry_content_text(entry)
 
         source_item_id = entry.get("id") or entry.get("guid")
 
@@ -168,6 +243,8 @@ def parse_feed(feed_name: str, source: str, url: str):
         if source == "google_alerts":
             link = resolve_google_redirect(link)
 
+        content = entry_content or fetch_article_content(link, source)
+
         # Use final link in the hash so duplicates collapse correctly
         content_hash = make_content_hash(title, link)
 
@@ -178,6 +255,7 @@ def parse_feed(feed_name: str, source: str, url: str):
             "url": link,
             "published_at": published_at,
             "summary": summary,
+            "content": content,
             "content_hash": content_hash,
         }
 
@@ -324,6 +402,7 @@ def parse_granicus_captions(page_url: str, existing_hashes: set[str] | None = No
             "url": caption_url,
             "published_at": published_at,
             "summary": summary,
+            "content": caption_text,
             "content_hash": content_hash,
         }
 
@@ -443,6 +522,7 @@ def parse_dcregs_recent_activities(
                 "url": item_url,
                 "published_at": to_iso_datetime(action_date) if action_date else None,
                 "summary": summary,
+                "content": " | ".join([part for part in [notice_id, agency, subject, register_issue] if part]),
                 "content_hash": content_hash,
                 }
             )

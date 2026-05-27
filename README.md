@@ -20,7 +20,7 @@ Subscribe [here](https://guozhan11.github.io/dc-council-agent/)!
 ## Digest behavior
 
 - Time window: only items from the last 7 days are eligible for each weekly run.
-- Summary input: all items in that 7-day window are sent to OpenAI.
+- Summary input: the top-ranked weekly items are sent to OpenAI with title, source, URL, feed summary, and a bounded content excerpt when richer source text is available.
 - Personalization pre-filter:
 	- For each subscriber, the sender extracts keyword-like terms from `topics` + `interests`.
 	- It first tries to summarize only interest-matching weekly items.
@@ -78,6 +78,13 @@ Optional:
 - `QUALITY_CHECK_MIN_SCORE`: Reviewer warning threshold (default `70`)
 - `DIGEST_ALERT_TO_EMAIL`: Address that receives delivery-failure alerts
 - `MAKEUP_TARGET_EMAILS`: Comma-separated emails to send make-up delivery to specific subscribers only
+
+Backfill existing rows after deploying richer content extraction:
+
+```bash
+python src/backfill_content.py --dry-run --limit 10
+python src/backfill_content.py --days 30
+```
 
 ---
 

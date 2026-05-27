@@ -103,6 +103,7 @@ def filter_items_for_interests(items: list[dict], interests: str) -> list[dict]:
             [
                 str(it.get("title") or ""),
                 str(it.get("summary") or ""),
+                str(it.get("content") or ""),
                 str(it.get("text") or ""),
                 str(it.get("source") or ""),
             ]
@@ -413,7 +414,7 @@ def main() -> int:
         else:
             sections["News mentions & other sources"].append(it)
 
-    # ---- AI summary (use top K items only to control cost) ----
+    # ---- AI summary (use all weekly items, sorted by importance/date) ----
     top_for_ai = items_sorted
 
     # ---- Template setup (do this BEFORE render) ----

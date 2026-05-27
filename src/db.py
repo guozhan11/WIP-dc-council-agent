@@ -21,11 +21,17 @@ def init_db(conn: sqlite3.Connection) -> None:
             url TEXT NOT NULL,
             published_at TEXT,
             summary TEXT,
+            content TEXT,
             content_hash TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
         """
     )
+
+    cur.execute("PRAGMA table_info(items)")
+    columns = {row[1] for row in cur.fetchall()}
+    if "content" not in columns:
+        cur.execute("ALTER TABLE items ADD COLUMN content TEXT")
 
     cur.execute(
         """
@@ -63,8 +69,8 @@ def insert_item(conn: sqlite3.Connection, item: Dict[str, Any]) -> bool:
     try:
         cur.execute(
             """
-            INSERT INTO items (source, source_item_id, title, url, published_at, summary, content_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO items (source, source_item_id, title, url, published_at, summary, content, content_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item.get("source"),
@@ -73,6 +79,7 @@ def insert_item(conn: sqlite3.Connection, item: Dict[str, Any]) -> bool:
                 item.get("url"),
                 item.get("published_at"),
                 item.get("summary"),
+                item.get("content"),
                 item.get("content_hash"),
             ),
         )
@@ -86,7 +93,7 @@ def get_items_since(conn: sqlite3.Connection, iso_datetime: str) -> List[Dict[st
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT source, source_item_id, title, url, published_at, summary, content_hash, created_at
+        SELECT source, source_item_id, title, url, published_at, summary, content, content_hash, created_at
         FROM items
         WHERE COALESCE(published_at, created_at) >= ?
         ORDER BY COALESCE(published_at, created_at) DESC

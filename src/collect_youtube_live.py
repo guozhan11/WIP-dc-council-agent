@@ -74,6 +74,7 @@ def youtube_item_to_db_item(source: str, it: dict) -> dict:
         "url": url,
         "published_at": published_at,
         "summary": summary,
+        "content": summary,
         "content_hash": content_hash,
     }
 
