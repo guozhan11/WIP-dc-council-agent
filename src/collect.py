@@ -5,6 +5,7 @@ import yaml
 import feedparser
 import requests
 import time
+from datetime import datetime
 from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
 
@@ -27,6 +28,7 @@ ARTICLE_FETCH_SKIP_SOURCES = {
     "dcregs",
     "dcregs_proposed",
     "dcregs_emergency",
+    "performance_oversight",
 }
 
 
@@ -532,6 +534,114 @@ def parse_dcregs_recent_activities(
             yield item
 
 
+def _normalize_source_id(text: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")
+    return normalized or "item"
+
+
+def _performance_oversight_url(url_template: str, year: int | None = None) -> tuple[str, int]:
+    resolved_year = int(year or datetime.now().year)
+    if "{year}" in url_template:
+        return url_template.format(year=resolved_year), resolved_year
+
+    match = re.search(r"performance-oversight-(\d{4})", url_template)
+    if match:
+        resolved_year = int(match.group(1))
+    return url_template, resolved_year
+
+
+def _performance_oversight_content_root(soup: BeautifulSoup):
+    for selector in ["article", "main", '[role="main"]', ".entry-content", ".page-content"]:
+        root = soup.select_one(selector)
+        if root:
+            return root
+    return soup.body or soup
+
+
+def _performance_oversight_committee_links(root, page_url: str) -> list[tuple[str, str]]:
+    skip_labels = {
+        "previous years' responses",
+        "previous years’ responses",
+        "performance oversight & budget schedules",
+        "dc council seal",
+    }
+    links = []
+    seen_urls = set()
+    for a in root.find_all("a"):
+        label = _normalize_whitespace(a.get_text(" ", strip=True))
+        href = (a.get("href") or "").strip()
+        if not label or not href:
+            continue
+
+        label_lc = label.lower()
+        if label_lc in skip_labels:
+            continue
+        if label_lc in {"rss", "get updates", "press center", "facebook", "twitter", "youtube"}:
+            continue
+
+        url = urljoin(page_url, href)
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            continue
+        if "dccouncil.gov" not in parsed.netloc and "dccouncil.us" not in parsed.netloc:
+            continue
+        if url in seen_urls:
+            continue
+
+        seen_urls.add(url)
+        links.append((label, url))
+    return links
+
+
+def parse_performance_oversight(page_url_template: str, year: int | None = None):
+    page_url, resolved_year = _performance_oversight_url(page_url_template, year)
+    try:
+        resp = requests.get(page_url, timeout=20, headers={"User-Agent": "dc-digest-bot/0.1"})
+        if resp.status_code == 404:
+            print(f"Performance oversight page not found for {resolved_year}: {page_url}")
+            return
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"Failed to fetch performance oversight page for {resolved_year}: {e}")
+        return
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    root = _performance_oversight_content_root(soup)
+
+    page_title = _normalize_whitespace((soup.find("h1") or soup.find("title") or root).get_text(" ", strip=True))
+    if not page_title:
+        page_title = f"Performance Oversight {resolved_year}"
+
+    summary = (
+        f"Official DC Council performance oversight page for {resolved_year}, "
+        "including committee oversight documents and related materials."
+    )
+    page_item_title = f"{page_title}: Overview"
+    yield {
+        "source": "performance_oversight",
+        "source_item_id": f"{resolved_year}:overview",
+        "title": page_item_title,
+        "url": page_url,
+        "published_at": None,
+        "summary": summary,
+        "content": _normalize_whitespace(root.get_text(" ", strip=True))[:12000],
+        "content_hash": make_content_hash(page_item_title, page_url),
+    }
+
+    for label, url in _performance_oversight_committee_links(root, page_url):
+        title = f"Performance Oversight {resolved_year}: {label}"
+        yield {
+            "source": "performance_oversight",
+            "source_item_id": f"{resolved_year}:{_normalize_source_id(label)}",
+            "title": title,
+            "url": url,
+            "published_at": None,
+            "summary": f"Committee oversight document linked from the official Performance Oversight {resolved_year} page.",
+            "content": f"{page_title} | {label} | {url}",
+            "content_hash": make_content_hash(title, url),
+        }
+
+
 def matches_keywords(text: str, keywords: list[str]) -> bool:
     if not keywords:
         return True
@@ -554,7 +664,7 @@ def main() -> int:
     init_db(conn)
 
     keywords = cfg.get("filters", {}).get("dc_council_keywords", [])
-    official_sources = {"granicus_rss", "granicus_captions", "council_rss", "youtube"}
+    official_sources = {"granicus_rss", "granicus_captions", "council_rss", "youtube", "performance_oversight"}
 
     total_new = 0
     dcregs_cfg = cfg.get("dcregs", {})
@@ -577,6 +687,8 @@ def main() -> int:
                 max_items_per_type=dcregs_max_items,
                 council_keywords=dcregs_council_keywords,
             )
+        elif source == "performance_oversight":
+            items_iter = parse_performance_oversight(url)
         else:
             items_iter = parse_feed(name, source, url)
 

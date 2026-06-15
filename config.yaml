@@ -18,6 +18,10 @@ feeds:
     source: "dcregs"
     url: "https://www.dcregs.dc.gov/default.aspx"
 
+  - name: "Performance oversight documents"
+    source: "performance_oversight"
+    url: "https://dccouncil.gov/performance-oversight-{year}/"
+
   - name: "YouTube channel videos"
     source: "youtube"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsRAGNZrk_9pfss7oyHs9GA"
@@ -68,6 +72,7 @@ ranking:
     youtube_upcoming: 2
     dcregs_proposed: 2
     dcregs_emergency: 2
+    performance_oversight: 3
     google_alerts: 3
     dc_bureau: 1
     washington_post: 1

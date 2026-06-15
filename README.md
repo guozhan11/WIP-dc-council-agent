@@ -43,6 +43,7 @@ The newsletter is generated from a mix of official and local news sources. Curre
 
 - DC Council official Granicus hearings feed
 - DC Register recent rulemakings (Proposed + Emergency), filtered to DC Council-related notices only
+- DC Council annual performance oversight documents, discovered from the current year's official oversight page
 - DC Council YouTube channel feed
 - Google Alerts for major news mentions
 - States Newsroom (DC Bureau)
