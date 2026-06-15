@@ -32,7 +32,9 @@
           </p>
         {% endif %}
 
-        <h3 style="margin: 0 0 10px; font-size: 16px; color: #111827; letter-spacing: 0.2px;">Weekly summary</h3>
+        <p style="margin: 0 0 4px; color: #111827; font-size: 12px; font-family: Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: 1px;">
+          Personalized edition
+        </p>
 
         {% if ai_summary.interest_notice_html %}
           <p style="margin: 0 0 10px; color: #6b7280; font-size: 13px;">
@@ -44,59 +46,90 @@
           </p>
         {% endif %}
 
-        <ol style="padding-left: 18px; margin: 0 0 10px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin: 8px 0 12px;">
           {% for b in ai_summary.bullets %}
-            <li style="margin-bottom: 10px;">
-              {% if b.detail %}
-                <strong>{{ b.lead }}</strong> — {{ b.detail }}
-              {% elif b.lead %}
-                <strong>{{ b.lead }}</strong>
-              {% else %}
-                <strong>{{ b.text }}</strong>
-              {% endif %}
-              {% if b.sources and b.sources|length > 0 %}
-                <span style="color: #6b7280; font-size: 12px;">
-                  {% for s in b.sources %}
-                    {% set src_url = source_url_map.get(s) %}
-                    {% if src_url %}
-                      <a href="{{ src_url }}" style="color: #6b7280; text-decoration: none;">[{{ s }}]</a>{% if not loop.last %} {% endif %}
-                    {% else %}
-                      [{{ s }}]{% if not loop.last %} {% endif %}
-                    {% endif %}
-                  {% endfor %}
-                </span>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ol>
-
-        {% if ai_summary.other_news_bullets and ai_summary.other_news_bullets|length > 0 %}
-          <h3 style="margin: 10px 0 10px; font-size: 16px; color: #111827; letter-spacing: 0.2px;">Other important news</h3>
-          <ol style="padding-left: 18px; margin: 0 0 10px;">
-            {% for b in ai_summary.other_news_bullets %}
-              <li style="margin-bottom: 10px;">
-                {% if b.detail %}
-                  <strong>{{ b.lead }}</strong> — {{ b.detail }}
-                {% elif b.lead %}
-                  <strong>{{ b.lead }}</strong>
-                {% else %}
-                  <strong>{{ b.text }}</strong>
+            <tr>
+              <td style="padding: {% if loop.first %}0{% else %}16px{% endif %} 0 14px; border-top: {% if loop.first %}3px solid #111827{% else %}1px solid #d1d5db{% endif %};">
+                <p style="margin: 8px 0 6px; color: #6b7280; font-size: 11px; font-family: Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: 0.8px;">
+                  {% if loop.first %}Lead story{% else %}Story {{ loop.index }}{% endif %}
+                </p>
+                <h2 style="font-family: Georgia, 'Times New Roman', serif; font-size: {% if loop.first %}23px{% else %}19px{% endif %}; line-height: 1.2; margin: 0 0 6px; color: #111827;">
+                  {{ b.headline or b.lead or b.text }}
+                </h2>
+                {% if b.keywords and b.keywords|length > 0 %}
+                  <p style="margin: 0 0 8px; color: #4b5563; font-size: 12px; font-family: Arial, Helvetica, sans-serif;">
+                    {% for kw in b.keywords %}
+                      <span style="display: inline-block; margin: 0 6px 5px 0; padding: 2px 6px; border: 1px solid #d1d5db; color: #374151;">{{ kw }}</span>
+                    {% endfor %}
+                  </p>
+                {% endif %}
+                <p style="margin: 0 0 8px; color: #111827; font-size: 15px; font-weight: 600;">
+                  {{ b.short_summary or b.lead or b.text }}
+                </p>
+                {% if b.long_summary or b.detail %}
+                  <p style="margin: 0 0 8px; color: #374151; font-size: 14px;">
+                    {{ b.long_summary or b.detail }}
+                  </p>
                 {% endif %}
                 {% if b.sources and b.sources|length > 0 %}
-                  <span style="color: #6b7280; font-size: 12px;">
+                  <p style="margin: 0; color: #6b7280; font-size: 12px; font-family: Arial, Helvetica, sans-serif;">
+                    Sources:
                     {% for s in b.sources %}
                       {% set src_url = source_url_map.get(s) %}
                       {% if src_url %}
-                        <a href="{{ src_url }}" style="color: #6b7280; text-decoration: none;">[{{ s }}]</a>{% if not loop.last %} {% endif %}
+                        <a href="{{ src_url }}" style="color: #4b5563; text-decoration: none;">[{{ s }}]</a>{% if not loop.last %} {% endif %}
                       {% else %}
                         [{{ s }}]{% if not loop.last %} {% endif %}
                       {% endif %}
                     {% endfor %}
-                  </span>
+                  </p>
                 {% endif %}
-              </li>
+              </td>
+            </tr>
+          {% endfor %}
+        </table>
+
+        {% if ai_summary.other_news_bullets and ai_summary.other_news_bullets|length > 0 %}
+          <h3 style="margin: 14px 0 8px; padding-top: 10px; border-top: 2px solid #111827; font-size: 16px; color: #111827; font-family: Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: 0.8px;">Other important news</h3>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse; margin: 0 0 10px;">
+            {% for b in ai_summary.other_news_bullets %}
+              <tr>
+                <td style="padding: 10px 0; border-top: 1px solid #d1d5db;">
+                  <h4 style="font-family: Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 1.25; margin: 0 0 5px; color: #111827;">
+                    {{ b.headline or b.lead or b.text }}
+                  </h4>
+                  {% if b.keywords and b.keywords|length > 0 %}
+                    <p style="margin: 0 0 6px; color: #4b5563; font-size: 12px; font-family: Arial, Helvetica, sans-serif;">
+                      {% for kw in b.keywords %}
+                        <span style="display: inline-block; margin: 0 6px 5px 0; padding: 2px 6px; border: 1px solid #d1d5db; color: #374151;">{{ kw }}</span>
+                      {% endfor %}
+                    </p>
+                  {% endif %}
+                  <p style="margin: 0 0 6px; color: #111827; font-size: 14px; font-weight: 600;">
+                    {{ b.short_summary or b.lead or b.text }}
+                  </p>
+                  {% if b.long_summary or b.detail %}
+                    <p style="margin: 0 0 6px; color: #374151; font-size: 13px;">
+                      {{ b.long_summary or b.detail }}
+                    </p>
+                  {% endif %}
+                  {% if b.sources and b.sources|length > 0 %}
+                    <p style="margin: 0; color: #6b7280; font-size: 12px; font-family: Arial, Helvetica, sans-serif;">
+                      Sources:
+                      {% for s in b.sources %}
+                        {% set src_url = source_url_map.get(s) %}
+                        {% if src_url %}
+                          <a href="{{ src_url }}" style="color: #4b5563; text-decoration: none;">[{{ s }}]</a>{% if not loop.last %} {% endif %}
+                        {% else %}
+                          [{{ s }}]{% if not loop.last %} {% endif %}
+                        {% endif %}
+                      {% endfor %}
+                    </p>
+                  {% endif %}
+                </td>
+              </tr>
             {% endfor %}
-          </ol>
+          </table>
         {% endif %}
 
         <p style="margin: 0 0 10px; color: #52606d; font-size: 13px;">

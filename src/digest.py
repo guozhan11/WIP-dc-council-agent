@@ -184,6 +184,45 @@ def summarize_interest_text(interests: str) -> str:
     return text or str(interests or "").strip()
 
 
+def derive_story_keywords(text: str, interests: str | None = None, max_keywords: int = 4) -> list[str]:
+    interest_terms = sorted(extract_interest_terms(interests or ""))
+    haystack = str(text or "").lower()
+    keywords = []
+    for term in interest_terms:
+        if term in haystack and term not in keywords:
+            keywords.append(term)
+        if len(keywords) >= max_keywords:
+            return keywords
+
+    for token in re.findall(r"[a-z][a-z0-9-]{3,}", haystack):
+        token = token.strip("-")
+        if token in INTEREST_STOPWORDS:
+            continue
+        if token not in keywords:
+            keywords.append(token)
+        if len(keywords) >= max_keywords:
+            break
+    return keywords
+
+
+def enrich_story_cards(ai_summary: dict, interests: str | None = None) -> None:
+    for key in ["bullets", "other_news_bullets"]:
+        for bullet in ai_summary.get(key, []) or []:
+            lead = str(bullet.get("headline") or bullet.get("lead") or "").strip()
+            detail = str(bullet.get("long_summary") or bullet.get("detail") or "").strip()
+            text = str(bullet.get("text") or "").strip()
+            if not lead and text:
+                lead = text.split(" — ", 1)[0].strip()
+            if not detail and " — " in text:
+                detail = text.split(" — ", 1)[1].strip()
+
+            bullet["headline"] = lead or "Council update"
+            bullet["short_summary"] = str(bullet.get("short_summary") or bullet.get("lead") or lead or text).strip()
+            bullet["long_summary"] = detail or text
+            if not bullet.get("keywords"):
+                bullet["keywords"] = derive_story_keywords(" ".join([lead, detail, text]), interests=interests)
+
+
 def build_preferences_notice(
     subscriber: dict,
     summarized_interests: str | None = None,
@@ -233,9 +272,60 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def build_plain_text(subject: str, highlights: list, sections: dict, unsubscribe_url: str) -> str:
+def build_plain_text(
+    subject: str,
+    highlights: list,
+    sections: dict,
+    unsubscribe_url: str,
+    ai_summary: dict | None = None,
+) -> str:
     lines = [subject, ""]
-    if highlights:
+    if ai_summary and ai_summary.get("bullets"):
+        if ai_summary.get("preferences_notice"):
+            lines.extend([str(ai_summary.get("preferences_notice")), ""])
+        if ai_summary.get("interest_notice"):
+            lines.extend([str(ai_summary.get("interest_notice")), ""])
+
+        lines.append("Personalized edition")
+        lines.append("")
+        for idx, bullet in enumerate(ai_summary.get("bullets") or [], start=1):
+            lines.append("Lead story" if idx == 1 else f"Story {idx}")
+            lines.append(str(bullet.get("headline") or bullet.get("lead") or bullet.get("text") or "").strip())
+            keywords = bullet.get("keywords") or []
+            if keywords:
+                lines.append("Keywords: " + ", ".join(str(k) for k in keywords))
+            if bullet.get("short_summary"):
+                lines.append(str(bullet.get("short_summary")).strip())
+            if bullet.get("long_summary") or bullet.get("detail"):
+                lines.append(str(bullet.get("long_summary") or bullet.get("detail")).strip())
+            if bullet.get("sources"):
+                lines.append("Sources: " + ", ".join(f"[{s}]" for s in bullet.get("sources")))
+            lines.append("")
+
+        if ai_summary.get("other_news_bullets"):
+            lines.append("Other important news")
+            lines.append("")
+            for bullet in ai_summary.get("other_news_bullets") or []:
+                lines.append(str(bullet.get("headline") or bullet.get("lead") or bullet.get("text") or "").strip())
+                keywords = bullet.get("keywords") or []
+                if keywords:
+                    lines.append("Keywords: " + ", ".join(str(k) for k in keywords))
+                if bullet.get("short_summary"):
+                    lines.append(str(bullet.get("short_summary")).strip())
+                if bullet.get("long_summary") or bullet.get("detail"):
+                    lines.append(str(bullet.get("long_summary") or bullet.get("detail")).strip())
+                if bullet.get("sources"):
+                    lines.append("Sources: " + ", ".join(f"[{s}]" for s in bullet.get("sources")))
+                lines.append("")
+
+        if ai_summary.get("sources"):
+            lines.append("Sources")
+            for source in ai_summary.get("sources") or []:
+                label = source.get("title") or f"Source {source.get('n')}"
+                url = source.get("url") or ""
+                lines.append(f"[{source.get('n')}] {label}: {url}".strip())
+            lines.append("")
+    elif highlights:
         lines.append("Top highlights")
         for it in highlights:
             lines.append(f"- {it.get('title')} ({it.get('source')}): {it.get('url')}")
@@ -267,8 +357,12 @@ def build_fallback_ai_summary(items_sorted: list[dict], max_bullets: int = 3) ->
         bullets.append(
             {
                 "text": f"{title} — Key update from {source_name} this week.",
+                "headline": title,
                 "lead": title,
                 "detail": f"Key update from {source_name} this week.",
+                "short_summary": f"Key update from {source_name} this week.",
+                "long_summary": f"{title} was among the notable DC Council-related updates collected this week.",
+                "keywords": derive_story_keywords(f"{title} {source_name}"),
                 "sources": [idx],
             }
         )
@@ -626,6 +720,8 @@ def main() -> int:
             )
             ai_summary["interest_notice_html"] = html.escape(ai_summary["interest_notice"])
 
+        enrich_story_cards(ai_summary, interests=interests)
+
         quality_review = {
             "approved": True,
             "score": 100,
@@ -769,7 +865,13 @@ def main() -> int:
                 ai_summary=summary_bundle.get("ai_summary"),
                 source_url_map=summary_bundle.get("source_url_map"),
             )
-            rendered_text = build_plain_text(summary_bundle.get("subject"), highlights, dict(sections), unsubscribe_url)
+            rendered_text = build_plain_text(
+                summary_bundle.get("subject"),
+                highlights,
+                dict(sections),
+                unsubscribe_url,
+                summary_bundle.get("ai_summary"),
+            )
 
             safe_email = re.sub(r"[^A-Za-z0-9_.-]+", "_", to_email)
             html_path = os.path.join(preview_dir, f"{idx:02d}_{safe_email}.html")
@@ -815,7 +917,13 @@ def main() -> int:
             ai_summary=summary_bundle.get("ai_summary"),
             source_url_map=summary_bundle.get("source_url_map"),
         )
-        text = build_plain_text(summary_bundle.get("subject"), highlights, dict(sections), unsubscribe_url)
+        text = build_plain_text(
+            summary_bundle.get("subject"),
+            highlights,
+            dict(sections),
+            unsubscribe_url,
+            summary_bundle.get("ai_summary"),
+        )
 
         # If your send_email_gmail_smtp DOES accept from_name, keep it.
         # If not, remove from_name.

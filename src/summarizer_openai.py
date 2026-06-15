@@ -268,7 +268,17 @@ def summarize_updates(
     {
       "headline": "...",
             "interest_notice": "..." | null,
-            "bullets": [{"text": "Lead clause — supporting detail", "sources": [1,3]}],
+            "bullets": [
+              {
+                "text": "Lead clause — supporting detail",
+                "lead": "Lead clause",
+                "detail": "supporting detail",
+                "keywords": ["housing", "oversight"],
+                "short_summary": "string",
+                "long_summary": "string",
+                "sources": [1,3]
+              }
+            ],
       "sources": [{"n": 1, "title": "...", "url": "...", "source": "..."}]
     }
     """
@@ -319,17 +329,18 @@ You are summarizing a weekly policy/news digest about DC Council.
 You MUST preserve traceability to sources.
 
 You will be given N source items, numbered [1]..[N].
-Write a concise weekly summary with up to {max_bullets} bullets.
+Write a concise weekly summary with up to {max_bullets} story cards.
 The headline must be a short, specific title that captures the most important development of the week.
-Each bullet must be exactly two parts: a one-sentence summary, then an em dash (" — "), then 1-2 sentences of supporting detail.
+Each story card must include a newspaper-style headline, 2-4 keywords, a short summary, and a longer paragraph.
 Prioritize items most relevant to the subscriber's interests. If none are relevant, summarize the most important items overall.
 
 Rules:
-- Every bullet MUST cite at least one source number in a "sources" list.
+- Every story card MUST cite at least one source number in a "sources" list.
 - Do NOT invent facts not supported by the items.
 - Keep bullets readable for a newsletter.
-- Bullets must be non-overlapping: each bullet should cover a different development, not rephrase the same event.
-- If there are fewer distinct developments, return fewer bullets (1-2 bullets is acceptable). Do not pad with repetitive bullets.
+- Story cards must be non-overlapping: each card should cover a different development, not rephrase the same event.
+- If there are fewer distinct developments, return fewer cards (1-2 cards is acceptable). Do not pad with repetitive cards.
+- Make keywords reflect the subscriber's interests when the story is relevant to those interests.
 {strict_interest_rules}
 
 Return ONLY valid JSON in this exact schema:
@@ -339,7 +350,11 @@ Return ONLY valid JSON in this exact schema:
     "interest_notice": "string or null",
   "bullets": [
     {{
-      "text": "string",
+      "text": "one-sentence summary — 1-2 sentences of supporting detail",
+      "headline": "newspaper-style story headline",
+      "keywords": ["keyword", "keyword"],
+      "short_summary": "one concise sentence",
+      "long_summary": "2-4 sentences with more context",
       "sources": [1, 2]
     }}
   ]
@@ -372,6 +387,10 @@ Here are the items as JSON:
 
     for bullet in summary.get("bullets", []):
         text = str(bullet.get("text") or "")
+        if not text:
+            short_summary = str(bullet.get("short_summary") or "").strip()
+            long_summary = str(bullet.get("long_summary") or "").strip()
+            text = f"{short_summary} — {long_summary}" if long_summary else short_summary
 
         structured_sources = _parse_source_numbers(bullet.get("sources"), len(trimmed_items))
         inline_tail_match = re.search(r"\((?:Sources?|Source)\s*:\s*([^)]*)\)\s*$", text, flags=re.IGNORECASE)
@@ -387,8 +406,31 @@ Here are the items as JSON:
 
         bullet_text = _clean_bullet_text(text)
         lead, detail = _split_bullet_text(bullet_text)
+        story_headline = str(bullet.get("headline") or "").strip()
+        short_summary = str(bullet.get("short_summary") or "").strip()
+        long_summary = str(bullet.get("long_summary") or "").strip()
+        if not story_headline:
+            story_headline = lead
+        if not short_summary:
+            short_summary = lead
+        if not long_summary:
+            long_summary = detail
+
+        raw_keywords = bullet.get("keywords") or []
+        if not isinstance(raw_keywords, list):
+            raw_keywords = []
+        keywords = []
+        for kw in raw_keywords:
+            cleaned_kw = re.sub(r"\s+", " ", str(kw or "").strip())
+            if cleaned_kw and cleaned_kw.lower() not in {k.lower() for k in keywords}:
+                keywords.append(cleaned_kw[:40])
+
+        bullet["headline"] = story_headline
         bullet["lead"] = lead
         bullet["detail"] = detail
+        bullet["short_summary"] = short_summary
+        bullet["long_summary"] = long_summary
+        bullet["keywords"] = keywords[:4]
         bullet["text"] = f"{lead} — {detail}" if detail else lead
 
     summary["bullets"] = _dedupe_bullets(summary.get("bullets", []))[:max_bullets]
