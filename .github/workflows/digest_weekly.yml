@@ -54,6 +54,7 @@ jobs:
           PREVIEW_RECIPIENT_LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_recipient_limit || '5' }}
           PREVIEW_OUTPUT_DIR: tmp/email_previews
         run: |
+          set -o pipefail
           mkdir -p tmp
           python src/digest.py | tee tmp/digest.log
 

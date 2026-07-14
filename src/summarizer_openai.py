@@ -69,6 +69,73 @@ def _load_summary_json(output_text: str) -> Dict[str, Any]:
             ) from original_error
 
 
+def _summary_json_schema(max_bullets: int) -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "headline": {"type": "string"},
+            "interest_notice": {"type": ["string", "null"]},
+            "bullets": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": max_bullets,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "headline": {"type": "string"},
+                        "keywords": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 4,
+                            "items": {"type": "string"},
+                        },
+                        "short_summary": {"type": "string"},
+                        "long_summary": {"type": "string"},
+                        "sources": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {"type": "integer"},
+                        },
+                    },
+                    "required": [
+                        "text",
+                        "headline",
+                        "keywords",
+                        "short_summary",
+                        "long_summary",
+                        "sources",
+                    ],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["headline", "interest_notice", "bullets"],
+        "additionalProperties": False,
+    }
+
+
+def _validate_summary_candidate(summary: Dict[str, Any], source_count: int) -> None:
+    if not str(summary.get("headline") or "").strip():
+        raise RuntimeError("Structured summary has an empty headline")
+
+    bullets = summary.get("bullets") or []
+    if not bullets:
+        raise RuntimeError("Structured summary has no story cards")
+
+    for idx, bullet in enumerate(bullets, start=1):
+        required_text_fields = ["text", "headline", "short_summary", "long_summary"]
+        empty_fields = [name for name in required_text_fields if not str(bullet.get(name) or "").strip()]
+        if empty_fields:
+            raise RuntimeError(
+                f"Structured story {idx} has empty fields: {', '.join(empty_fields)}"
+            )
+
+        valid_sources = _parse_source_numbers(bullet.get("sources"), source_count)
+        if not valid_sources:
+            raise RuntimeError(f"Structured story {idx} has no valid source ids")
+
+
 def summarize_interest_phrase(interests: str, *, model: str = "gpt-4.1-mini") -> str:
     cleaned_interests = str(interests or "").strip()
     if not cleaned_interests:
@@ -373,17 +440,51 @@ Here are the items as JSON:
 {json.dumps(trimmed_items, ensure_ascii=False)}
 """.strip()
 
-    # Responses API call (OpenAI Python SDK)
-    # (Docs: API reference and structured outputs are supported in the platform docs.) :contentReference[oaicite:2]{index=2}
-    resp = client.responses.create(
-        model=model,
-        input=prompt,
-    )
+    try:
+        max_attempts = max(1, int(os.environ.get("AI_SUMMARY_MAX_ATTEMPTS", "3")))
+    except ValueError:
+        max_attempts = 3
 
-    # SDK response format can vary by version; this is a robust way:
-    output_text = _response_to_text(resp)
+    summary = None
+    attempt_errors = []
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = client.responses.create(
+                model=model,
+                input=prompt,
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "dc_council_personalized_digest",
+                        "schema": _summary_json_schema(max_bullets),
+                        "strict": True,
+                    }
+                },
+            )
+            output_text = _response_to_text(resp)
+            if not output_text.strip():
+                raise RuntimeError("OpenAI returned no structured summary text")
 
-    summary = _load_summary_json(output_text)
+            candidate = _load_summary_json(output_text)
+            _validate_summary_candidate(candidate, len(trimmed_items))
+            summary = candidate
+            if attempt > 1:
+                print(f"AI structured summary succeeded on attempt {attempt} of {max_attempts}.")
+            break
+        except Exception as e:
+            error_text = re.sub(r"\s+", " ", str(e)).strip()
+            attempt_errors.append(error_text[:500])
+            if attempt < max_attempts:
+                print(
+                    f"AI structured summary attempt {attempt} of {max_attempts} failed; "
+                    "retrying with the same subscriber interests and sources."
+                )
+
+    if summary is None:
+        details = " | ".join(attempt_errors)
+        raise RuntimeError(
+            f"AI structured summary failed after {max_attempts} attempt(s): {details}"
+        )
 
     for bullet in summary.get("bullets", []):
         text = str(bullet.get("text") or "")
@@ -437,7 +538,6 @@ Here are the items as JSON:
 
     ordered_source_ids: List[int] = []
     filtered_bullets: List[Dict[str, Any]] = []
-    sourceless_bullets: List[Dict[str, Any]] = []
     for b in summary.get("bullets", []):
         normalized: List[int] = []
         for s in b.get("sources", []):
@@ -448,19 +548,6 @@ Here are the items as JSON:
         b["sources"] = normalized
         if b.get("text") and normalized:
             filtered_bullets.append(b)
-        elif b.get("text"):
-            # Keep for a controlled fallback that still guarantees references.
-            sourceless_bullets.append(b)
-
-    # If source validation wiped all citations, keep the model text but attach
-    # deterministic fallback references so every bullet remains traceable.
-    if not filtered_bullets and sourceless_bullets:
-        synthesized_bullets: List[Dict[str, Any]] = []
-        for idx, b in enumerate(sourceless_bullets[:max_bullets], start=1):
-            fallback_source = idx if idx <= len(trimmed_items) else 1
-            b["sources"] = [fallback_source]
-            synthesized_bullets.append(b)
-        filtered_bullets = synthesized_bullets
 
     summary["bullets"] = filtered_bullets[:max_bullets]
 

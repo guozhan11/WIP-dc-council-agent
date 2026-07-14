@@ -29,6 +29,9 @@ Subscribe [here](https://guozhan11.github.io/dc-council-agent/)!
 - Source/citation integrity:
 	- Bullets are normalized to citation ids.
 	- Summaries are blocked only when structure is unusable (for example empty bullets/sources or uncited bullets).
+	- Personalized summaries use strict OpenAI Structured Outputs with a JSON Schema, preventing unescaped quotes and other free-form JSON syntax errors.
+	- Failed or invalid structured responses are retried with the same subscriber interests and source set (three attempts by default via `AI_SUMMARY_MAX_ATTEMPTS`).
+	- The campaign sends only after every subscriber has a validated AI-personalized summary; exhausted retries fail the run before SMTP delivery rather than substituting rule-generated copy.
 - OpenAI review step:
 	- A secondary OpenAI check runs as a format/readability reviewer.
 	- Reviewer failures are warning-only (do not block send) unless structural checks fail.
@@ -77,6 +80,7 @@ Optional:
 - `AUTO_QUALITY_CHECK`: Set `false` to disable OpenAI reviewer step
 - `QUALITY_CHECK_MODEL`: Model used by the reviewer (default `gpt-4.1-mini`)
 - `QUALITY_CHECK_MIN_SCORE`: Reviewer warning threshold (default `70`)
+- `AI_SUMMARY_MAX_ATTEMPTS`: Maximum structured AI generation attempts per summary (default `3`)
 - `DIGEST_ALERT_TO_EMAIL`: Address that receives delivery-failure alerts
 - `MAKEUP_TARGET_EMAILS`: Comma-separated emails to send make-up delivery to specific subscribers only
 
@@ -92,7 +96,9 @@ python src/backfill_content.py --days 30
 ## Automated safety and recovery
 
 - Preflight report (every run): logs bullet count, cited bullet count, source count, and quality score per subscriber.
-- Delivery failure report: writes `tmp/failed_recipients.json` with failed recipients and error messages.
+- Delivery failure report: writes an untracked `tmp/failed_recipients.json` with failed recipients and error messages, so uploaded artifacts cannot contain a stale report committed by an earlier run.
+- CI failure propagation: the weekly workflow uses shell pipe failure handling so a non-zero digest exit is not hidden by log capture through `tee`.
+- Zero-subscriber and partial-delivery runs return a failure status so GitHub cannot report incomplete delivery as successful.
 - Alert email on failed sends: if `DIGEST_ALERT_TO_EMAIL` is set, the sender emails a failure summary automatically.
 - Targeted make-up runs: set `MAKEUP_TARGET_EMAILS` to retry only specific subscribers instead of everyone.
 - Preview mode for CI/manual runs: enable `PREVIEW_ONLY_MODE=true` to generate HTML/TXT previews without delivery.

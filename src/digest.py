@@ -343,46 +343,6 @@ def build_plain_text(
     return "\n".join(lines)
 
 
-def build_fallback_ai_summary(items_sorted: list[dict], max_bullets: int = 3) -> dict:
-    fallback_items = items_sorted[:max_bullets]
-    bullets = []
-    sources = []
-    for idx, it in enumerate(fallback_items, start=1):
-        title = html.unescape((it.get("title") or "Update").strip())
-        title = re.sub(r"<[^>]+>", "", title)
-        title = re.sub(r"\*\*(.*?)\*\*", r"\1", title)
-        title = re.sub(r"__(.*?)__", r"\1", title)
-        title = re.sub(r"\s+", " ", title).strip()
-        source_name = (it.get("source") or "source").strip()
-        bullets.append(
-            {
-                "text": f"{title} — Key update from {source_name} this week.",
-                "headline": title,
-                "lead": title,
-                "detail": f"Key update from {source_name} this week.",
-                "short_summary": f"Key update from {source_name} this week.",
-                "long_summary": f"{title} was among the notable DC Council-related updates collected this week.",
-                "keywords": derive_story_keywords(f"{title} {source_name}"),
-                "sources": [idx],
-            }
-        )
-        sources.append(
-            {
-                "n": idx,
-                "title": title,
-                "url": it.get("url") or "",
-                "source": source_name,
-            }
-        )
-
-    return {
-        "headline": "DC Council Weekly Updates",
-        "interest_notice": "AI summary fallback was used due to a temporary processing issue.",
-        "bullets": bullets,
-        "sources": sources,
-    }
-
-
 def get_active_subscribers_from_apps_script() -> list[dict]:
     def _clean_secret(value: str) -> str:
         return str(value or "").strip().strip('"').strip("'")
@@ -555,14 +515,13 @@ def main() -> int:
             print("The following make-up targets are not active subscribers and will be skipped: " + ", ".join(missing))
 
     if not subscribers:
-        print("No active subscribers. Exiting.")
-        return 0
+        print("No active subscribers. Failing the run because no digest can be delivered.")
+        return 1
 
     summaries_by_email = {}
     interest_phrase_cache: dict[str, str] = {}
     ai_failures = 0
-    ai_fallbacks = 0
-    ai_fallback_emails: list[str] = []
+    ai_failure_emails: list[str] = []
     format_blocks: list[tuple[str, str]] = []
     quality_warnings: list[tuple[str, str]] = []
     for sub in subscribers:
@@ -659,29 +618,21 @@ def main() -> int:
                 else:
                     ai_summary["other_news_bullets"] = []
                     ai_summary["other_news_sources"] = []
-            # Guard: AI succeeded but returned unusable references.
-            # Patch in rule-based bullets/sources so emails always carry
-            # valid citations.
+            # Guard: a structured AI response must remain usable after all
+            # relevance and citation normalization.
             has_bullets = bool(ai_summary.get("bullets"))
             has_sources = bool(ai_summary.get("sources"))
             all_bullets_cited = all(bool(b.get("sources")) for b in ai_summary.get("bullets", []))
             if not has_bullets or not has_sources or not all_bullets_cited:
-                print(
-                    f"Warning: AI returned missing citations for {sub.get('email')}; "
-                    "patching with fallback bullets/sources."
+                raise RuntimeError(
+                    "AI summary became unusable after relevance/citation validation"
                 )
-                fallback = build_fallback_ai_summary(items_for_ai or top_for_ai, max_bullets=3)
-                ai_summary["bullets"] = fallback["bullets"]
-                ai_summary["sources"] = fallback["sources"]
-                ai_fallbacks += 1
-                ai_fallback_emails.append(sub.get("email") or "(unknown)")
         except Exception as e:
             ai_failures += 1
-            ai_fallbacks += 1
-            ai_fallback_emails.append(sub.get("email") or "(unknown)")
+            ai_failure_emails.append(sub.get("email") or "(unknown)")
             print(f"AI summary error for {sub.get('email')}: {e}")
-            print("Using fallback summary for this subscriber.")
-            ai_summary = build_fallback_ai_summary(items_for_ai or top_for_ai, max_bullets=3)
+            print("No email will be sent until every subscriber has a validated AI summary.")
+            continue
 
         summarized_interest = ""
         raw_interests = str(sub.get("interests") or "").strip()
@@ -777,12 +728,13 @@ def main() -> int:
     if provider != "gmail_smtp":
         raise ValueError('Set email.provider to "gmail_smtp" in config.yaml.')
 
-    # Safety rule: if any subscriber required AI fallback, abort the run and
-    # do not send any emails.
-    if ai_fallbacks > 0:
+    # Preserve the invariant that every delivered message contains a validated
+    # AI-personalized summary. A failed subscriber can be retried by rerunning
+    # the workflow; no partial campaign is sent.
+    if ai_failures > 0:
         print(
-            "Aborting send: AI fallback was triggered for "
-            f"{ai_fallbacks} subscriber(s): {', '.join(ai_fallback_emails)}"
+            "Aborting send: validated AI summaries could not be generated for "
+            f"{ai_failures} subscriber(s): {', '.join(ai_failure_emails)}"
         )
         return 1
 
@@ -979,10 +931,13 @@ def main() -> int:
             print(f"Delivery alert failed: {e}")
 
     print(
-        f"Weekly digest finished. sent={sent_count}, send_failures={send_failures}, ai_fallbacks={ai_fallbacks}"
+        f"Weekly digest finished. sent={sent_count}, send_failures={send_failures}, ai_failures={ai_failures}"
     )
     if sent_count == 0:
         print("No messages were sent successfully.")
+        return 1
+    if send_failures > 0:
+        print("One or more messages failed to send.")
         return 1
     return 0
 
