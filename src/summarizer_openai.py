@@ -320,16 +320,38 @@ def url_domain(url: str) -> str:
     return host[4:] if host.startswith("www.") else host
 
 
+CITATION_STOPWORDS = set(
+    "the a an of to in on and for with dc washington district its it at by from as is are "
+    "was were this that new over more council".split()
+)
+
+
+def _citation_tokens(text: str) -> set:
+    return {
+        w for w in re.findall(r"[a-z0-9]+", str(text or "").lower())
+        if len(w) > 2 and w not in CITATION_STOPWORDS
+    }
+
+
 def _rank_sources_by_authority(
     source_ids: List[int],
     trimmed_items: List[Dict[str, Any]],
     domain_weight: Dict[str, Any] | None,
+    story_text: str = "",
 ) -> List[int]:
-    """Order one card's citations by publisher, model order breaking ties.
+    """Order one card's citations: on-topic first, then publisher, then model order.
 
-    Keyed on domain, not the `source` field: every syndicated copy arrives
-    through the same google_alerts feed, so `source` cannot tell the
+    Publisher is keyed on domain, not the `source` field: every syndicated copy
+    arrives through the same google_alerts feed, so `source` cannot tell the
     Washington Post original from a mirror of it.
+
+    Relevance has to outrank publisher. The model cites a few sources that have
+    nothing to do with the card, and ranking on publisher alone promotes those
+    into the visible few whenever they happen to come from a strong outlet — a
+    National Guard card cited a Washington Post piece about an apple-eating
+    party, which had been harmlessly buried before. A source whose title and
+    summary share no vocabulary with the card sinks below every source that
+    does, whatever its domain is worth.
 
     Applied only to picking among copies of a story the model already grouped,
     so it cannot change which stories appear — unlike weighting the ranking
@@ -342,9 +364,13 @@ def _rank_sources_by_authority(
     suffixes = domain_weight.get("domain_suffixes") or {}
     default = domain_weight.get("default_weight", 0)
 
+    story_tokens = _citation_tokens(story_text)
+
+    def item_at(source_id: int) -> Dict[str, Any]:
+        return trimmed_items[source_id - 1] if 1 <= source_id <= len(trimmed_items) else {}
+
     def weight_of(source_id: int) -> int:
-        item = trimmed_items[source_id - 1] if 1 <= source_id <= len(trimmed_items) else {}
-        host = url_domain(item.get("url") or "")
+        host = url_domain(item_at(source_id).get("url") or "")
         if host in domains:
             return domains[host]
         # Official publications are whole domain trees, so match on suffix and
@@ -352,8 +378,15 @@ def _rank_sources_by_authority(
         matches = [w for suffix, w in suffixes.items() if host == suffix or host.endswith("." + suffix)]
         return max(matches) if matches else default
 
-    return [s for _, _, s in sorted(
-        ((-weight_of(s), position, s) for position, s in enumerate(source_ids))
+    def on_topic(source_id: int) -> int:
+        if not story_tokens:
+            return 1
+        item = item_at(source_id)
+        overlap = _citation_tokens(f"{item.get('title') or ''} {item.get('summary') or ''}")
+        return 1 if overlap & story_tokens else 0
+
+    return [s for _, _, _, s in sorted(
+        ((-on_topic(s), -weight_of(s), position, s) for position, s in enumerate(source_ids))
     )]
 
 
@@ -589,7 +622,12 @@ Here are the items as JSON:
         # the weighting the survivors are whichever copies the model happened
         # to list first, which is how a Washington Post story ended up cited
         # to content farms and syndication mirrors.
-        kept = _rank_sources_by_authority(normalized, trimmed_items, citation_domain_weight)
+        story_text = " ".join(
+            str(b.get(field) or "") for field in ("headline", "short_summary", "long_summary", "text")
+        )
+        kept = _rank_sources_by_authority(
+            normalized, trimmed_items, citation_domain_weight, story_text
+        )
         if max_sources_per_bullet > 0:
             kept = kept[:max_sources_per_bullet]
         b["extra_source_count"] = len(normalized) - len(kept)

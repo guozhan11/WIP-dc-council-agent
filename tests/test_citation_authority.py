@@ -106,6 +106,39 @@ class OfficialSourcesOutrankMediaTests(unittest.TestCase):
 
         self.assertEqual(kept[0], len(items))
 
+    def test_relevance_outranks_a_strong_publisher(self):
+        # Observed in a preview: the Post's apple-party feature was promoted
+        # into a National Guard card's visible citations purely on domain.
+        story = (
+            "Justice Department Rebukes DC Council on National Guard Withdrawal Demand. "
+            "The DOJ called the letters politically motivated theatrics."
+        )
+        items = [
+            {"url": "https://www.washingtonpost.com/dc-md-va/2026/08/15/hottest-dc-party-eating-apples-park/",
+             "title": "He invited people to eat an apple with him. Hundreds showed up."},
+            {"url": "https://thehill.com/homenews/administration/6026345",
+             "title": "DOJ slams DC City Council for requests to remove National Guard"},
+        ]
+
+        self.assertEqual(_rank_sources_by_authority([1, 2], items, DOMAIN_WEIGHT, story), [2, 1])
+
+    def test_publisher_still_decides_between_two_on_topic_sources(self):
+        story = "Justice Department rebukes the Council over National Guard withdrawal."
+        items = [
+            {"url": "https://au.news.yahoo.com/x", "title": "DOJ scolds Council over National Guard"},
+            {"url": "https://www.washingtonpost.com/dc-md-va/x", "title": "DOJ slams Council over National Guard"},
+        ]
+
+        self.assertEqual(_rank_sources_by_authority([1, 2], items, DOMAIN_WEIGHT, story), [2, 1])
+
+    def test_without_story_text_publisher_alone_decides(self):
+        items = [
+            {"url": "https://aol.com/x", "title": "Mirror copy"},
+            {"url": "https://www.washingtonpost.com/x", "title": "Original"},
+        ]
+
+        self.assertEqual(_rank_sources_by_authority([1, 2], items, DOMAIN_WEIGHT, ""), [2, 1])
+
     def test_unlisted_dc_gov_agency_sites_are_treated_as_official(self):
         items = [
             {"url": "https://www.washingtonpost.com/dc-md-va/x"},
