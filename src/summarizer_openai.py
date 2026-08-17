@@ -172,7 +172,7 @@ def _build_sources_block(items: List[Dict[str, Any]]) -> str:
     # Number sources starting from 1 so citations are [1], [2], ...
     lines = []
     for i, it in enumerate(items, start=1):
-        title = _sanitize_source_title(it.get("title") or "") or "Untitled"
+        title = sanitize_source_title(it.get("title") or "") or "Untitled"
         url = (it.get("url") or "").strip()
         source = (it.get("source") or "").strip()
         label = f"[{i}] {title}"
@@ -269,7 +269,7 @@ def _clean_bullet_text(text: str) -> str:
     return cleaned
 
 
-def _sanitize_source_title(value: str) -> str:
+def sanitize_source_title(value: str) -> str:
     text = html.unescape(str(value or ""))
     # Some feeds include inline markup (<b>..</b>) in titles.
     text = re.sub(r"<[^>]+>", "", text)
@@ -363,7 +363,7 @@ def summarize_updates(
             content_excerpt = summary_text[:3000]
         trimmed_items.append(
             {
-                "title": _sanitize_source_title((it.get("title") or ""))[:200],
+                "title": sanitize_source_title((it.get("title") or ""))[:200],
                 "source": (it.get("source") or "")[:80],
                 "url": _normalize_source_url(it)[:500],
                 "summary": summary_text[:1000],
@@ -563,7 +563,7 @@ Here are the items as JSON:
         sources.append(
             {
                 "n": renumber_map.get(old_id, old_id),
-                "title": _sanitize_source_title(it.get("title") or ""),
+                "title": sanitize_source_title(it.get("title") or ""),
                 "url": it.get("url") or "",
                 "source": it.get("source") or "",
             }

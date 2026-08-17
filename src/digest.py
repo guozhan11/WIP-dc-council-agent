@@ -15,7 +15,7 @@ from db import connect, init_db, get_items_since
 from interest_matching import extract_interest_terms, text_matches_interest_terms
 from utils import score_item
 from emailer_gmail import send_email_gmail_smtp
-from summarizer_openai import summarize_interest_phrase, summarize_updates, review_summary_quality, verify_interest_relevance
+from summarizer_openai import sanitize_source_title, summarize_interest_phrase, summarize_updates, review_summary_quality, verify_interest_relevance
 
 load_dotenv()
 
@@ -288,16 +288,13 @@ def build_plain_text(
     elif highlights:
         lines.append("Top highlights")
         for it in highlights:
-            lines.append(f"- {it.get('title')} ({it.get('source')}): {it.get('url')}")
+            title = sanitize_source_title(it.get("title") or "") or "Untitled"
+            lines.append(f"- {title} ({it.get('source')}): {it.get('url')}")
         lines.append("")
 
-    for section_name, items in sections.items():
-        if not items:
-            continue
-        lines.append(section_name)
-        for it in items:
-            lines.append(f"- {it.get('title')} ({it.get('source')}): {it.get('url')}")
-        lines.append("")
+    # `sections` holds every weekly item, unranked and unfiltered by interest.
+    # The HTML template does not render it, so listing it here would make the
+    # text/plain part a dump of off-topic links that no HTML reader ever sees.
 
     lines.append(f"Unsubscribe: {unsubscribe_url}")
     return "\n".join(lines)
