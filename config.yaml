@@ -34,9 +34,11 @@ feeds:
     source: "dc_bureau"
     url: "https://www.newsfromthestates.com/api/v2/article/category?article_category=565"
 
+  # The arcio/rss endpoint this used to point at no longer responds at all
+  # (read timeout on every attempt); feeds.washingtonpost.com is the live one.
   - name: "Washington Post Politics"
     source: "washington_post"
-    url: "https://www.washingtonpost.com/arcio/rss/category/politics/?itid=lk_inline_manual_2"
+    url: "https://feeds.washingtonpost.com/rss/politics"
 
   - name: "Washington Post Local"
     source: "washington_post"

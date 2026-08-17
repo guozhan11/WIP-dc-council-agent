@@ -111,36 +111,51 @@ def normalize_granicus_video_url(raw_link: str, summary_html: str) -> str:
     return cleaned_link
 
 
+FEED_USER_AGENTS = (
+    "dc-digest-bot/0.1",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+)
+
+# washingtonpost.com answers its RSS in ~10s, which left no room under the old
+# 20s ceiling once a retry was involved.
+FEED_TIMEOUT_SECONDS = 30
+
+
 def fetch_feed(url: str, source: str):
-    headers = {"User-Agent": "dc-digest-bot/0.1"}
-    if source == "washington_times":
-        headers["User-Agent"] = (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        )
+    """Fetch one feed, retrying transient blocks and timeouts.
 
-    resp = requests.get(
-        url,
-        timeout=20,
-        headers=headers,
-    )
+    Publishers rate-limit and time out intermittently rather than
+    permanently — a 403 from washingtontimes.com and a read timeout from
+    washingtonpost.com both cleared on a later attempt — so a failure here
+    silently drops a whole source for the day. Retry with backoff, rotating
+    the user agent, before giving up.
+    """
+    last_error: Exception | None = None
 
-    if source == "washington_times" and resp.status_code == 403:
-        # Retry once with a different UA to avoid basic blocks.
-        headers["User-Agent"] = (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        )
-        resp = requests.get(
-            url,
-            timeout=20,
-            headers=headers,
-        )
+    for attempt, user_agent in enumerate(FEED_USER_AGENTS):
+        if attempt:
+            time.sleep(2 ** attempt)
+        try:
+            resp = requests.get(
+                url,
+                timeout=FEED_TIMEOUT_SECONDS,
+                headers={
+                    "User-Agent": user_agent,
+                    "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            )
+            resp.raise_for_status()
+            if attempt:
+                print(f"  {source}: recovered on attempt {attempt + 1}")
+            return feedparser.parse(resp.text)
+        except Exception as e:
+            last_error = e
 
-    resp.raise_for_status()
-    return feedparser.parse(resp.text)
+    raise last_error
 
 
 def _normalize_whitespace(text: str) -> str:
