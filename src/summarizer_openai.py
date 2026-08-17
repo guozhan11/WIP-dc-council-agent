@@ -339,11 +339,18 @@ def _rank_sources_by_authority(
         return list(source_ids)
 
     domains = domain_weight.get("domains") or {}
+    suffixes = domain_weight.get("domain_suffixes") or {}
     default = domain_weight.get("default_weight", 0)
 
     def weight_of(source_id: int) -> int:
         item = trimmed_items[source_id - 1] if 1 <= source_id <= len(trimmed_items) else {}
-        return domains.get(url_domain(item.get("url") or ""), default)
+        host = url_domain(item.get("url") or "")
+        if host in domains:
+            return domains[host]
+        # Official publications are whole domain trees, so match on suffix and
+        # take the most specific one: dcregs.dc.gov before dc.gov.
+        matches = [w for suffix, w in suffixes.items() if host == suffix or host.endswith("." + suffix)]
+        return max(matches) if matches else default
 
     return [s for _, _, s in sorted(
         ((-weight_of(s), position, s) for position, s in enumerate(source_ids))

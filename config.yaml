@@ -73,7 +73,10 @@ ranking:
     dcregs_proposed: 2
     dcregs_emergency: 2
     performance_oversight: 3
-    google_alerts: 3
+    # An aggregator of third-party coverage, not a publisher, and the feed the
+    # syndication duplicates arrive through. It must not tie with the Council's
+    # own record: at 3 it outranked every Granicus hearing in the corpus.
+    google_alerts: 1
     dc_bureau: 1
     washington_post: 1
     washington_times: 1
@@ -87,34 +90,42 @@ ranking:
   # keyed on the publisher's domain. Unlisted domains take default_weight.
   citation_domain_weight:
     default_weight: 3
+
+    # Official publications outrank every third-party outlet, and by a margin
+    # no media tier can reach. When the Council has published the record
+    # itself, that is the citation; press coverage of it is secondary.
+    domain_suffixes:
+      dc.gov: 10            # dccouncil.gov sits under this, as do agency sites
+      dccouncil.gov: 10
+      dc.granicus.com: 10   # hearing video and captions
+      dcregs.dc.gov: 10
+
     domains:
       # DC-native reporting
-      washingtonpost.com: 9
-      wamu.org: 8
-      washingtoncitypaper.com: 8
-      ggwash.org: 8
-      51st.news: 8
-      washingtoninformer.com: 7
-      dc.citycast.fm: 7
-      washingtonian.com: 7
-      popville.com: 7
-      afro.com: 7
-      notus.org: 7
-      wtop.com: 6
-      washingtontimes.com: 6
-      # Official
-      dmv.dc.gov: 9
+      washingtonpost.com: 6
+      wamu.org: 6
+      washingtoncitypaper.com: 6
+      ggwash.org: 6
+      51st.news: 6
+      washingtoninformer.com: 5
+      dc.citycast.fm: 5
+      washingtonian.com: 5
+      popville.com: 5
+      afro.com: 5
+      notus.org: 5
+      wtop.com: 5
+      washingtontimes.com: 5
       # Local broadcast
-      wusa9.com: 6
-      nbcwashington.com: 6
-      wjla.com: 6
-      fox5dc.com: 6
+      wusa9.com: 4
+      nbcwashington.com: 4
+      wjla.com: 4
+      fox5dc.com: 4
       # National outlets covering DC
-      thehill.com: 5
-      washingtonexaminer.com: 5
-      foxnews.com: 5
-      dailywire.com: 4
-      justthenews.com: 4
+      thehill.com: 4
+      washingtonexaminer.com: 4
+      foxnews.com: 4
+      dailywire.com: 3
+      justthenews.com: 3
       # Aggregators, mirrors and syndication endpoints: real articles, but
       # never the copy to cite when the original is also in the corpus.
       news.yahoo.com: 1

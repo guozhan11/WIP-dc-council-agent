@@ -80,5 +80,40 @@ class RankSourcesByAuthorityTests(unittest.TestCase):
         self.assertEqual(_rank_sources_by_authority([3, 1, 2], SYNDICATED, None), [3, 1, 2])
 
 
+class OfficialSourcesOutrankMediaTests(unittest.TestCase):
+    OFFICIAL = [
+        {"url": "https://dc.granicus.com/MediaPlayer.php?view_id=2&clip_id=1"},
+        {"url": "https://dccouncil.gov/performance-oversight-2026/"},
+        {"url": "https://dcregs.dc.gov/Common/NoticeDetail.aspx?NoticeId=1"},
+        {"url": "https://dmv.dc.gov/release/purple-heart-plate"},
+    ]
+
+    def test_every_official_domain_beats_the_strongest_media_domain(self):
+        best_media = max(DOMAIN_WEIGHT["domains"].values())
+        items = self.OFFICIAL + [{"url": "https://www.washingtonpost.com/dc-md-va/x"}]
+        ids = list(range(1, len(items) + 1))
+
+        ranked = _rank_sources_by_authority(ids, items, DOMAIN_WEIGHT)
+
+        self.assertEqual(ranked[-1], len(items), "the Washington Post should rank last here")
+        self.assertLess(best_media, min(DOMAIN_WEIGHT["domain_suffixes"].values()))
+
+    def test_an_official_record_survives_the_cap_against_many_outlets(self):
+        items = SYNDICATED + [{"url": "https://dc.granicus.com/MediaPlayer.php?clip_id=9"}]
+        ids = list(range(1, len(items) + 1))
+
+        kept = _rank_sources_by_authority(ids, items, DOMAIN_WEIGHT)[:4]
+
+        self.assertEqual(kept[0], len(items))
+
+    def test_unlisted_dc_gov_agency_sites_are_treated_as_official(self):
+        items = [
+            {"url": "https://www.washingtonpost.com/dc-md-va/x"},
+            {"url": "https://doee.dc.gov/release/beps-update"},
+        ]
+
+        self.assertEqual(_rank_sources_by_authority([1, 2], items, DOMAIN_WEIGHT), [2, 1])
+
+
 if __name__ == "__main__":
     unittest.main()
