@@ -12,10 +12,10 @@ from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 
 from db import connect, init_db, get_items_since
-from interest_matching import extract_interest_terms, text_matches_interest_terms
+from interest_matching import INTEREST_STOPWORDS, extract_interest_terms, text_matches_interest_terms
 from utils import score_item
 from emailer_gmail import send_email_gmail_smtp
-from summarizer_openai import sanitize_source_title, summarize_interest_phrase, summarize_updates, review_summary_quality, verify_interest_relevance
+from summarizer_openai import normalize_source_url, sanitize_source_title, summarize_interest_phrase, summarize_updates, review_summary_quality, verify_interest_relevance
 
 load_dotenv()
 
@@ -71,6 +71,34 @@ def filter_items_for_interests(items: list[dict], interests: str) -> list[dict]:
         if text_matches_interest_terms(haystack, terms):
             matched.append(it)
     return matched
+
+
+def build_other_news_pool(
+    interest_matched: list[dict],
+    all_items: list[dict],
+    already_cited: list[dict],
+) -> list[dict]:
+    """Candidate items for the "Other important news" section.
+
+    Interest matches come first so they get the low citation numbers the model
+    reaches for, with the rest of the week behind them so there is always
+    enough material. Anything the personalized section already cited is
+    dropped, otherwise the same story is cited twice in one email.
+    """
+    cited_urls = {str(s.get("url") or "").strip() for s in already_cited}
+    cited_urls.discard("")
+
+    pool = []
+    seen = set()
+    for group in (interest_matched or [], all_items or []):
+        for it in group:
+            url = normalize_source_url(it).strip()
+            if url and (url in cited_urls or url in seen):
+                continue
+            if url:
+                seen.add(url)
+            pool.append(it)
+    return pool
 
 
 def send_delivery_alert(
@@ -239,6 +267,13 @@ def build_plain_text(
     unsubscribe_url: str,
     ai_summary: dict | None = None,
 ) -> str:
+    def sources_line(bullet: dict) -> str:
+        line = "Sources: " + ", ".join(f"[{s}]" for s in bullet.get("sources") or [])
+        extra = bullet.get("extra_source_count") or 0
+        if extra > 0:
+            line += f" and {extra} more outlet{'s' if extra != 1 else ''}"
+        return line
+
     lines = [subject, ""]
     if ai_summary and ai_summary.get("bullets"):
         if ai_summary.get("preferences_notice"):
@@ -259,7 +294,7 @@ def build_plain_text(
             if bullet.get("long_summary") or bullet.get("detail"):
                 lines.append(str(bullet.get("long_summary") or bullet.get("detail")).strip())
             if bullet.get("sources"):
-                lines.append("Sources: " + ", ".join(f"[{s}]" for s in bullet.get("sources")))
+                lines.append(sources_line(bullet))
             lines.append("")
 
         if ai_summary.get("other_news_bullets"):
@@ -275,7 +310,7 @@ def build_plain_text(
                 if bullet.get("long_summary") or bullet.get("detail"):
                     lines.append(str(bullet.get("long_summary") or bullet.get("detail")).strip())
                 if bullet.get("sources"):
-                    lines.append("Sources: " + ", ".join(f"[{s}]" for s in bullet.get("sources")))
+                    lines.append(sources_line(bullet))
                 lines.append("")
 
         if ai_summary.get("sources"):
@@ -537,14 +572,20 @@ def main() -> int:
                     ai_summary["bullets"] = [bullets[i - 1] for i in relevant_indices if 1 <= i <= len(bullets)]
                     _renumber_summary_sources(ai_summary)
 
-                # If only one relevant bullet remains, add two general bullets in
-                # a separate section: Other important news.
+                # If only one relevant bullet remains, add two more bullets in a
+                # separate section: Other important news. This pool stays
+                # interest-aware — drawing it from the global list with
+                # interests=None gave every subscriber the same two stories.
                 if len(ai_summary.get("bullets", [])) == 1:
                     other_summary = summarize_updates(
-                        top_for_ai,
+                        build_other_news_pool(
+                            interest_matched_items,
+                            top_for_ai,
+                            ai_summary.get("sources") or [],
+                        ),
                         model="gpt-4.1-mini",
                         max_bullets=2,
-                        interests=None,
+                        interests=interests,
                     )
                     other_bullets = other_summary.get("bullets", [])[:2]
                     other_sources = other_summary.get("sources", [])

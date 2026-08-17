@@ -299,7 +299,7 @@ def _relevant_excerpt(text: str, interests: str | None, max_chars: int = 3000) -
     return cleaned[:max_chars].strip()
 
 
-def _normalize_source_url(item: Dict[str, Any]) -> str:
+def normalize_source_url(item: Dict[str, Any]) -> str:
     url = str(item.get("url") or "").strip()
     source = str(item.get("source") or "").strip()
     if source != "granicus_rss" or "DownloadFile.php" not in url:
@@ -322,6 +322,7 @@ def summarize_updates(
     max_bullets: int = 8,
     interests: str | None = None,
     strict_interest: bool = False,
+    max_sources_per_bullet: int = 4,
 ) -> Dict[str, Any]:
     """
     Returns a dict like:
@@ -365,7 +366,7 @@ def summarize_updates(
             {
                 "title": sanitize_source_title((it.get("title") or ""))[:200],
                 "source": (it.get("source") or "")[:80],
-                "url": _normalize_source_url(it)[:500],
+                "url": normalize_source_url(it)[:500],
                 "summary": summary_text[:1000],
                 "content_excerpt": content_excerpt[:3000],
                 "date": it.get("date") or it.get("published_at") or it.get("created_at"),
@@ -538,8 +539,13 @@ Here are the items as JSON:
                 normalized.append(s)
             if isinstance(s, int) and 1 <= s <= len(trimmed_items) and s not in ordered_source_ids:
                 ordered_source_ids.append(s)
-        b["sources"] = normalized
-        if b.get("text") and normalized:
+        # A widely syndicated story reaches us once per outlet, so the model
+        # correctly groups them into one card and then cites every copy. Keep
+        # the citations it ranked first and report the rest as a count.
+        kept = normalized[:max_sources_per_bullet] if max_sources_per_bullet > 0 else normalized
+        b["extra_source_count"] = len(normalized) - len(kept)
+        b["sources"] = kept
+        if b.get("text") and kept:
             filtered_bullets.append(b)
 
     summary["bullets"] = filtered_bullets[:max_bullets]

@@ -82,6 +82,9 @@
                         [{{ s }}]{% if not loop.last %} {% endif %}
                       {% endif %}
                     {% endfor %}
+                    {% if b.extra_source_count and b.extra_source_count > 0 %}
+                      and {{ b.extra_source_count }} more outlet{% if b.extra_source_count != 1 %}s{% endif %}
+                    {% endif %}
                   </p>
                 {% endif %}
               </td>
@@ -124,6 +127,9 @@
                           [{{ s }}]{% if not loop.last %} {% endif %}
                         {% endif %}
                       {% endfor %}
+                      {% if b.extra_source_count and b.extra_source_count > 0 %}
+                        and {{ b.extra_source_count }} more outlet{% if b.extra_source_count != 1 %}s{% endif %}
+                      {% endif %}
                     </p>
                   {% endif %}
                 </td>
