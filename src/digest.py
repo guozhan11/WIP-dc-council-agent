@@ -859,7 +859,7 @@ def main() -> int:
         unsubscribe_url = f"{base_unsub}?path=unsubscribe&token={token}"
 
         summary_bundle = summaries_by_email.get(to_email, {})
-        html = template.render(
+        rendered_html = template.render(
             subject=summary_bundle.get("subject"),
             window_start=window_start_date,
             window_end=window_end_date,
@@ -886,7 +886,7 @@ def main() -> int:
                 from_email=email_cfg["from_email"],
                 to_email=to_email,
                 subject=summary_bundle.get("subject"),
-                html_content=html,
+                html_content=rendered_html,
                 text_content=text,
                 from_name=email_cfg.get("from_name", ""),
             )
