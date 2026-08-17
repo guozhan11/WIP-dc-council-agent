@@ -81,6 +81,59 @@ ranking:
     popville: 1
     ggwash: 1
 
+  # Used only to choose which copies of one story a summary card cites. A
+  # widely syndicated story arrives ~20 times, and `source` cannot separate
+  # them because they all come in through the google_alerts feed, so this is
+  # keyed on the publisher's domain. Unlisted domains take default_weight.
+  citation_domain_weight:
+    default_weight: 3
+    domains:
+      # DC-native reporting
+      washingtonpost.com: 9
+      wamu.org: 8
+      washingtoncitypaper.com: 8
+      ggwash.org: 8
+      51st.news: 8
+      washingtoninformer.com: 7
+      dc.citycast.fm: 7
+      washingtonian.com: 7
+      popville.com: 7
+      afro.com: 7
+      notus.org: 7
+      wtop.com: 6
+      washingtontimes.com: 6
+      # Official
+      dmv.dc.gov: 9
+      # Local broadcast
+      wusa9.com: 6
+      nbcwashington.com: 6
+      wjla.com: 6
+      fox5dc.com: 6
+      # National outlets covering DC
+      thehill.com: 5
+      washingtonexaminer.com: 5
+      foxnews.com: 5
+      dailywire.com: 4
+      justthenews.com: 4
+      # Aggregators, mirrors and syndication endpoints: real articles, but
+      # never the copy to cite when the original is also in the corpus.
+      news.yahoo.com: 1
+      ca.news.yahoo.com: 1
+      au.news.yahoo.com: 1
+      yahoo.com: 1
+      aol.com: 1
+      ground.news: 1
+      msn.com: 1
+      ntd.com: 1
+      wfin.com: 1
+      streamlinefeed.co.ke: 1
+      san.com: 1
+      sfg.media: 1
+      supertalk929.com: 1
+      the-sun.com: 1
+      buttondown.com: 2
+      youtube.com: 2
+
 highlights:
   max_items: 8
   keywords:

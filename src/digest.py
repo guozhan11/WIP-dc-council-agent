@@ -471,6 +471,7 @@ def main() -> int:
 
     # ---- scoring/sorting FIRST (so AI sees the most important items) ----
     source_weight = cfg["ranking"]["source_weight"]
+    citation_domain_weight = cfg["ranking"].get("citation_domain_weight") or {}
     keywords = cfg["highlights"]["keywords"]
     max_highlights = int(cfg["highlights"]["max_items"])
 
@@ -574,6 +575,7 @@ def main() -> int:
                 max_bullets=3,
                 interests=interests,
                 strict_interest=bool(interests and not no_interest_match),
+                citation_domain_weight=citation_domain_weight,
             )
 
             # OpenAI relevance verification for interest-specific summaries.
@@ -600,6 +602,7 @@ def main() -> int:
                             max_bullets=3,
                             interests=interests,
                             strict_interest=True,
+                            citation_domain_weight=citation_domain_weight,
                         )
 
                 if relevant_indices:
@@ -621,6 +624,7 @@ def main() -> int:
                         model="gpt-4.1-mini",
                         max_bullets=2,
                         interests=interests,
+                        citation_domain_weight=citation_domain_weight,
                     )
                     other_bullets = other_summary.get("bullets", [])[:2]
                     other_sources = other_summary.get("sources", [])

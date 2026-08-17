@@ -315,6 +315,41 @@ def normalize_source_url(item: Dict[str, Any]) -> str:
     return url
 
 
+def url_domain(url: str) -> str:
+    host = urlparse(str(url or "").strip()).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _rank_sources_by_authority(
+    source_ids: List[int],
+    trimmed_items: List[Dict[str, Any]],
+    domain_weight: Dict[str, Any] | None,
+) -> List[int]:
+    """Order one card's citations by publisher, model order breaking ties.
+
+    Keyed on domain, not the `source` field: every syndicated copy arrives
+    through the same google_alerts feed, so `source` cannot tell the
+    Washington Post original from a mirror of it.
+
+    Applied only to picking among copies of a story the model already grouped,
+    so it cannot change which stories appear — unlike weighting the ranking
+    that feeds the model, which promotes whole outlets regardless of topic.
+    """
+    if not domain_weight:
+        return list(source_ids)
+
+    domains = domain_weight.get("domains") or {}
+    default = domain_weight.get("default_weight", 0)
+
+    def weight_of(source_id: int) -> int:
+        item = trimmed_items[source_id - 1] if 1 <= source_id <= len(trimmed_items) else {}
+        return domains.get(url_domain(item.get("url") or ""), default)
+
+    return [s for _, _, s in sorted(
+        ((-weight_of(s), position, s) for position, s in enumerate(source_ids))
+    )]
+
+
 def summarize_updates(
     items: List[Dict[str, Any]],
     *,
@@ -323,6 +358,7 @@ def summarize_updates(
     interests: str | None = None,
     strict_interest: bool = False,
     max_sources_per_bullet: int = 4,
+    citation_domain_weight: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Returns a dict like:
@@ -542,8 +578,13 @@ Here are the items as JSON:
                 ordered_source_ids.append(s)
         # A widely syndicated story reaches us once per outlet, so the model
         # correctly groups them into one card and then cites every copy. Keep
-        # the citations it ranked first and report the rest as a count.
-        kept = normalized[:max_sources_per_bullet] if max_sources_per_bullet > 0 else normalized
+        # the most authoritative few and report the rest as a count. Without
+        # the weighting the survivors are whichever copies the model happened
+        # to list first, which is how a Washington Post story ended up cited
+        # to content farms and syndication mirrors.
+        kept = _rank_sources_by_authority(normalized, trimmed_items, citation_domain_weight)
+        if max_sources_per_bullet > 0:
+            kept = kept[:max_sources_per_bullet]
         b["extra_source_count"] = len(normalized) - len(kept)
         b["sources"] = kept
         if b.get("text") and kept:
