@@ -401,7 +401,8 @@ Rules:
 - Keep bullets readable for a newsletter.
 - Story cards must be non-overlapping: each card should cover a different development, not rephrase the same event.
 - If there are fewer distinct developments, return fewer cards (1-2 cards is acceptable). Do not pad with repetitive cards.
-- Make keywords reflect the subscriber's interests when the story is relevant to those interests.
+- Keywords must describe the story itself. Use a subscriber interest as a keyword only when that
+  subject actually appears in the story; never tag an unrelated story with the subscriber's interests.
 {strict_interest_rules}
 
 Return ONLY valid JSON in this exact schema:

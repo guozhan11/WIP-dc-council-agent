@@ -12,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 
 from db import connect, init_db, get_items_since
-from interest_matching import INTEREST_STOPWORDS, extract_interest_terms, text_matches_interest_terms
+from interest_matching import INTEREST_STOPWORDS, extract_interest_terms, related_topic_terms, text_matches_interest_terms
 from utils import score_item
 from emailer_gmail import send_email_gmail_smtp
 from summarizer_openai import normalize_source_url, sanitize_source_title, summarize_interest_phrase, summarize_updates, review_summary_quality, verify_interest_relevance
@@ -193,6 +193,36 @@ def derive_story_keywords(text: str, interests: str | None = None, max_keywords:
     return keywords
 
 
+def drop_unsupported_interest_keywords(keywords: list, story_text: str, interests: str | None) -> list:
+    """Remove a subscriber's own interest terms from a story that never mentions them.
+
+    Told to make keywords reflect subscriber interests, the model sometimes
+    tags an unrelated story with them — a National Guard card labelled
+    "Energy, Pepco" reads as if it were selected for those interests.
+
+    Only keywords that are themselves interest terms are checked. A keyword the
+    model coined to describe the story ("climate policy" over "building energy
+    performance standards") is left alone even when it is absent verbatim.
+
+    Support is judged against the whole topic group, so a story that spells out
+    "building energy performance standards" still supports a "BEPS" keyword.
+    """
+    interest_terms = extract_interest_terms(interests)
+    if not interest_terms:
+        return keywords
+
+    kept = []
+    for keyword in keywords:
+        keyword_terms = extract_interest_terms(keyword)
+        is_interest_echo = bool(keyword_terms) and keyword_terms <= interest_terms
+        if is_interest_echo and not text_matches_interest_terms(
+            story_text, related_topic_terms(keyword_terms)
+        ):
+            continue
+        kept.append(keyword)
+    return kept
+
+
 def enrich_story_cards(ai_summary: dict, interests: str | None = None) -> None:
     for key in ["bullets", "other_news_bullets"]:
         for bullet in ai_summary.get(key, []) or []:
@@ -209,6 +239,11 @@ def enrich_story_cards(ai_summary: dict, interests: str | None = None) -> None:
             bullet["long_summary"] = detail or text
             if not bullet.get("keywords"):
                 bullet["keywords"] = derive_story_keywords(" ".join([lead, detail, text]), interests=interests)
+
+            story_text = " ".join([lead, detail, text, str(bullet.get("short_summary") or "")])
+            bullet["keywords"] = drop_unsupported_interest_keywords(
+                bullet.get("keywords") or [], story_text, interests
+            )
 
 
 def build_preferences_notice(

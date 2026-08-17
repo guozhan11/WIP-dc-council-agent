@@ -207,6 +207,20 @@ def extract_interest_terms(interests: str | None) -> set[str]:
     return expanded_terms
 
 
+def related_topic_terms(terms: set[str]) -> set[str]:
+    """Widen terms to every alias of the topic groups they belong to.
+
+    Lets a story be recognized as covering a subject it names differently:
+    text spelling out "building energy performance standards" supports the
+    term "beps", because both sit in the same group.
+    """
+    widened = set(terms)
+    for _, keywords in TOPIC_KEYWORD_GROUPS:
+        if terms & keywords:
+            widened.update(keywords)
+    return widened
+
+
 def text_matches_interest_terms(text: str, terms: set[str]) -> bool:
     normalized_text = str(text or "").lower()
     for term in terms:
