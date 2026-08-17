@@ -327,10 +327,36 @@ CITATION_STOPWORDS = set(
 
 
 def _citation_tokens(text: str) -> set:
+    """Loose stems for judging whether a source is about a story.
+
+    Truncated rather than exact, so inflections of the same word still meet:
+    a card about a "withdrawal demand" is supported by a source headlined
+    "asking governors to withdraw troops". Being forgiving is the right error
+    here — a false match leaves a weak citation visible, a false miss drops a
+    real one.
+    """
     return {
-        w for w in re.findall(r"[a-z0-9]+", str(text or "").lower())
+        w[:5] for w in re.findall(r"[a-z0-9]+", str(text or "").lower())
         if len(w) > 2 and w not in CITATION_STOPWORDS
     }
+
+
+def _on_topic_sources(
+    source_ids: List[int],
+    trimmed_items: List[Dict[str, Any]],
+    story_text: str,
+) -> List[int]:
+    """Source ids whose title or summary shares vocabulary with the card."""
+    story_tokens = _citation_tokens(story_text)
+    if not story_tokens:
+        return list(source_ids)
+
+    kept = []
+    for source_id in source_ids:
+        item = trimmed_items[source_id - 1] if 1 <= source_id <= len(trimmed_items) else {}
+        if _citation_tokens(f"{item.get('title') or ''} {item.get('summary') or ''}") & story_tokens:
+            kept.append(source_id)
+    return kept
 
 
 def _rank_sources_by_authority(
@@ -616,18 +642,19 @@ Here are the items as JSON:
                 normalized.append(s)
             if isinstance(s, int) and 1 <= s <= len(trimmed_items) and s not in ordered_source_ids:
                 ordered_source_ids.append(s)
-        # A widely syndicated story reaches us once per outlet, so the model
-        # correctly groups them into one card and then cites every copy. Keep
-        # the most authoritative few and report the rest as a count. Without
-        # the weighting the survivors are whichever copies the model happened
-        # to list first, which is how a Washington Post story ended up cited
-        # to content farms and syndication mirrors.
+        # Breadth of sourcing is the point of the citations, so show as many as
+        # the cap allows — but only ones actually about this card. The model
+        # attaches a few unrelated sources to every card, and those stay out of
+        # the visible list however high the cap goes; they are still counted in
+        # the "and N more outlets" remainder.
         story_text = " ".join(
             str(b.get(field) or "") for field in ("headline", "short_summary", "long_summary", "text")
         )
-        kept = _rank_sources_by_authority(
+        ranked = _rank_sources_by_authority(
             normalized, trimmed_items, citation_domain_weight, story_text
         )
+        on_topic = _on_topic_sources(ranked, trimmed_items, story_text)
+        kept = on_topic or ranked  # never leave a card with no citation at all
         if max_sources_per_bullet > 0:
             kept = kept[:max_sources_per_bullet]
         b["extra_source_count"] = len(normalized) - len(kept)

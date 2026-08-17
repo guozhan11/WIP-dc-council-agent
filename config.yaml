@@ -86,6 +86,12 @@ ranking:
     popville: 1
     ggwash: 1
 
+  # How many sources one story card lists before the rest become "and N more
+  # outlets". Breadth of sourcing is the point, so this is deliberately
+  # generous; only sources actually about the card are ever shown, so raising
+  # it surfaces more corroboration rather than more noise.
+  max_sources_per_bullet: 10
+
   # Used only to choose which copies of one story a summary card cites. A
   # widely syndicated story arrives ~20 times, and `source` cannot separate
   # them because they all come in through the google_alerts feed, so this is

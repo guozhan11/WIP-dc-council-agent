@@ -8,7 +8,7 @@ import yaml
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from summarizer_openai import _rank_sources_by_authority, url_domain  # noqa: E402
+from summarizer_openai import _on_topic_sources, _rank_sources_by_authority, url_domain  # noqa: E402
 
 
 CONFIG = yaml.safe_load((Path(__file__).resolve().parents[1] / "config.yaml").read_text())
@@ -146,6 +146,32 @@ class OfficialSourcesOutrankMediaTests(unittest.TestCase):
         ]
 
         self.assertEqual(_rank_sources_by_authority([1, 2], items, DOMAIN_WEIGHT), [2, 1])
+
+
+class OnTopicSourcesTests(unittest.TestCase):
+    STORY = "Justice Department rebukes the Council over its National Guard withdrawal demand."
+    ITEMS = [
+        {"title": "DOJ slams Council for requests to remove National Guard", "summary": ""},
+        {"title": "He invited people to eat an apple with him", "summary": "Hundreds showed up."},
+        {"title": "Asst. AG scolds Council for asking governors to withdraw troops", "summary": ""},
+    ]
+
+    def test_off_topic_sources_are_excluded_not_merely_ranked_last(self):
+        self.assertEqual(_on_topic_sources([1, 2, 3], self.ITEMS, self.STORY), [1, 3])
+
+    def test_a_generous_cap_does_not_resurface_off_topic_sources(self):
+        # The whole reason the cap could be raised: filtering happens first.
+        ranked = _rank_sources_by_authority([1, 2, 3], self.ITEMS, DOMAIN_WEIGHT, self.STORY)
+
+        self.assertNotIn(2, _on_topic_sources(ranked, self.ITEMS, self.STORY)[:10])
+
+    def test_everything_is_kept_when_the_card_has_no_text(self):
+        self.assertEqual(_on_topic_sources([1, 2, 3], self.ITEMS, ""), [1, 2, 3])
+
+
+class ConfiguredCapTests(unittest.TestCase):
+    def test_config_asks_for_a_generous_citation_cap(self):
+        self.assertGreaterEqual(CONFIG["ranking"]["max_sources_per_bullet"], 8)
 
 
 if __name__ == "__main__":

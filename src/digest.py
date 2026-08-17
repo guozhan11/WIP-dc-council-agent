@@ -472,6 +472,7 @@ def main() -> int:
     # ---- scoring/sorting FIRST (so AI sees the most important items) ----
     source_weight = cfg["ranking"]["source_weight"]
     citation_domain_weight = cfg["ranking"].get("citation_domain_weight") or {}
+    max_sources_per_bullet = int(cfg["ranking"].get("max_sources_per_bullet", 4))
     keywords = cfg["highlights"]["keywords"]
     max_highlights = int(cfg["highlights"]["max_items"])
 
@@ -576,6 +577,7 @@ def main() -> int:
                 interests=interests,
                 strict_interest=bool(interests and not no_interest_match),
                 citation_domain_weight=citation_domain_weight,
+                max_sources_per_bullet=max_sources_per_bullet,
             )
 
             # OpenAI relevance verification for interest-specific summaries.
@@ -603,6 +605,7 @@ def main() -> int:
                             interests=interests,
                             strict_interest=True,
                             citation_domain_weight=citation_domain_weight,
+                            max_sources_per_bullet=max_sources_per_bullet,
                         )
 
                 if relevant_indices:
@@ -625,6 +628,7 @@ def main() -> int:
                         max_bullets=2,
                         interests=interests,
                         citation_domain_weight=citation_domain_weight,
+                        max_sources_per_bullet=max_sources_per_bullet,
                     )
                     other_bullets = other_summary.get("bullets", [])[:2]
                     other_sources = other_summary.get("sources", [])
