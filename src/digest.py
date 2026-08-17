@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 
 from db import connect, init_db, get_items_since
+from interest_matching import extract_interest_terms, text_matches_interest_terms
 from utils import score_item
 from emailer_gmail import send_email_gmail_smtp
 from summarizer_openai import summarize_interest_phrase, summarize_updates, review_summary_quality, verify_interest_relevance
@@ -51,47 +52,6 @@ def parse_email_list(value: str) -> set[str]:
     return emails
 
 
-INTEREST_STOPWORDS = {
-    "about",
-    "against",
-    "around",
-    "because",
-    "between",
-    "council",
-    "district",
-    "focus",
-    "general",
-    "interest",
-    "interests",
-    "issues",
-    "policy",
-    "program",
-    "programs",
-    "public",
-    "their",
-    "these",
-    "those",
-    "topic",
-    "topics",
-    "update",
-    "updates",
-    "washington",
-    "week",
-    "with",
-}
-
-
-def extract_interest_terms(interests: str) -> set[str]:
-    terms = set()
-    for token in re.findall(r"[a-z0-9]+", str(interests or "").lower()):
-        if len(token) < 4:
-            continue
-        if token in INTEREST_STOPWORDS:
-            continue
-        terms.add(token)
-    return terms
-
-
 def filter_items_for_interests(items: list[dict], interests: str) -> list[dict]:
     terms = extract_interest_terms(interests)
     if not terms:
@@ -107,8 +67,8 @@ def filter_items_for_interests(items: list[dict], interests: str) -> list[dict]:
                 str(it.get("text") or ""),
                 str(it.get("source") or ""),
             ]
-        ).lower()
-        if any(term in haystack for term in terms):
+        )
+        if text_matches_interest_terms(haystack, terms):
             matched.append(it)
     return matched
 

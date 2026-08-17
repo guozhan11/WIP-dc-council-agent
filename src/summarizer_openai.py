@@ -7,6 +7,8 @@ from typing import Any, Dict, List
 
 from openai import OpenAI
 
+from interest_matching import extract_interest_terms, text_matches_interest_terms
+
 
 def _get_openai_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
@@ -278,26 +280,17 @@ def _sanitize_source_title(value: str) -> str:
     return text
 
 
-def _interest_terms(interests: str | None) -> set[str]:
-    terms = set()
-    for token in re.findall(r"[a-z0-9]+", str(interests or "").lower()):
-        if len(token) >= 4:
-            terms.add(token)
-    return terms
-
-
 def _relevant_excerpt(text: str, interests: str | None, max_chars: int = 3000) -> str:
     cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
     if len(cleaned) <= max_chars:
         return cleaned
 
-    terms = _interest_terms(interests)
+    terms = extract_interest_terms(interests)
     if terms:
         sentences = re.split(r"(?<=[.!?])\s+", cleaned)
         matched = []
         for sentence in sentences:
-            sentence_terms = _tokenize(sentence)
-            if terms & sentence_terms:
+            if text_matches_interest_terms(sentence, terms):
                 matched.append(sentence.strip())
         excerpt = re.sub(r"\s+", " ", " ".join(matched)).strip()
         if excerpt:

@@ -23,6 +23,8 @@ Subscribe [here](https://guozhan11.github.io/dc-council-agent/)!
 - Summary input: the top-ranked weekly items are sent to OpenAI with title, source, URL, feed summary, and a bounded content excerpt when richer source text is available.
 - Personalization pre-filter:
 	- For each subscriber, the sender extracts keyword-like terms from `topics` + `interests`.
+	- Broad topics expand to policy-specific aliases before matching. This covers Budget, Public safety, Housing, Transportation, Education, Health, and common environmental terms such as climate, energy, BEPS, emissions, sustainability, and stormwater.
+	- Matching uses word boundaries so short aliases such as `bus` do not match unrelated words such as `business`.
 	- It first tries to summarize only interest-matching weekly items.
 	- If no matching items are found, it falls back to general weekly items and shows a notice:
 		- `No updates this week for your interests: ... Showing general updates instead.`
