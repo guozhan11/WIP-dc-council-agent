@@ -51,9 +51,9 @@
             <tr>
               <td style="padding: {% if loop.first %}0{% else %}16px{% endif %} 0 14px; border-top: {% if loop.first %}3px solid #111827{% else %}1px solid #d1d5db{% endif %};">
                 <p style="margin: 8px 0 6px; color: #6b7280; font-size: 11px; font-family: Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: 0.8px;">
-                  {% if loop.first %}Lead story{% else %}Story {{ loop.index }}{% endif %}
+                  Story {{ loop.index }}
                 </p>
-                <h2 style="font-family: Georgia, 'Times New Roman', serif; font-size: {% if loop.first %}23px{% else %}19px{% endif %}; line-height: 1.2; margin: 0 0 6px; color: #111827;">
+                <h2 style="font-family: Georgia, 'Times New Roman', serif; font-size: 19px; line-height: 1.2; margin: 0 0 6px; color: #111827;">
                   {{ b.headline or b.lead or b.text }}
                 </h2>
                 {% if b.keywords and b.keywords|length > 0 %}

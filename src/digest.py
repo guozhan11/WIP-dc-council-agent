@@ -319,7 +319,7 @@ def build_plain_text(
         lines.append("Personalized edition")
         lines.append("")
         for idx, bullet in enumerate(ai_summary.get("bullets") or [], start=1):
-            lines.append("Lead story" if idx == 1 else f"Story {idx}")
+            lines.append(f"Story {idx}")
             lines.append(str(bullet.get("headline") or bullet.get("lead") or bullet.get("text") or "").strip())
             keywords = bullet.get("keywords") or []
             if keywords:
